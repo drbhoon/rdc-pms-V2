@@ -55,14 +55,44 @@ All routes live under `src/pages/`. There is **no** `src/app/` directory. Past R
 
 ```
 Employee uploaded → HR selects for cycle → AssessmentPair created
-  status: PENDING_RM
-    → RM submits form → rmAnswers saved
-  status: RM_SUBMITTED
-    → BH reviews + submits → bhAnswers saved, both rows locked
-  status: FINALIZED, lockStatus: LOCKED
+  [PENDING_SELF]  (only if template.includeSelf) → employee self-assessment
+  PENDING_RM       → RM submits → rmAnswers saved
+  RM_SUBMITTED     → BH reviews + submits → bhAnswers saved
+  [BH_SUBMITTED]      (if template has an active HR_SPOC stage) → HR-SPOC comments
+  [HR_SPOC_SUBMITTED] (if active HR_HEAD stage)                 → HR-HEAD comments
+  [HR_HEAD_SUBMITTED] (if active COTO stage)                    → COTO approval
+  FINALIZED, lockStatus: LOCKED
 ```
 
-Super Admin can unlock any pair via `/admin/audit`.
+Stages in `[...]` are optional and configured per template. The pair finalises
+as soon as no further active stage remains. Super Admin can unlock via `/admin/audit`.
+
+### V2: post-BH commenter stages (HR_SPOC → HR_HEAD → COTO)
+
+After BH, a template may route the assessment through up to three **commenter**
+stages. Commenters are view-only on the Self/RM/BH ratings; they fill only
+their own fields.
+
+- **Template config** (`/admin/setup`): each stage has a routing name+email and
+  a list of fields (`hrSpocFields`/`hrHeadFields`/`cotoFields` JSONB on
+  `RoleTemplate`). A stage is **active** iff it has ≥1 field AND a routing email.
+  Excel columns named `HR_SPOC_*` / `HR_HEAD_*` / `COTO_*` are auto-detected and
+  seeded into the field editors (kept out of the assessment questions).
+- **HrReview table**: one row per (pair, commenter role), pre-created at launch
+  for each active stage. Holds the commenter's `fields`, `token`, `submittedOn`,
+  `invitedOn`. The pair only carries `requireHr{Spoc,Head,Coto}` snapshot flags.
+- **Forms**: `/form/{hr_spoc,hr_head,coto}/[token]` — shared
+  `src/components/HrCommenterForm.js` + `src/lib/hrFormHandler.js` factory.
+  Each commenter sees prior stages' comments read-only (cumulative).
+- **Invites/reminders**: `runInvites`/`runReminders` in `src/lib/invites.js`
+  process the three roles off `HrReview` rows, gated on prior active stages
+  being complete. Same batch-email + `/reviewer/[token]` dashboard pattern.
+- **Report**: `src/lib/reportXlsx.js` appends HR field columns to each pair's
+  **BH row** (not extra rows). HR-SPOC can download a one-pair xlsx at
+  `/api/form/hr_spoc/report/[token]`.
+
+State-machine helpers (`nextStateAfter`, `priorStagesComplete`, `HR_ORDER`)
+live in `src/lib/queries.js`.
 
 ### Database (Prisma + PostgreSQL)
 
