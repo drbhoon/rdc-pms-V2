@@ -5,6 +5,65 @@
 import { prisma } from './db';
 import { generatePairId } from './pairId';
 
+// ── V2 post-BH commenter stage helpers ───────────────────────────────────────
+// The three commenter stages run in this order after BH. Each is optional
+// per template (snapshotted onto the pair as requireHr* flags at launch).
+export const HR_ORDER = ['HR_SPOC', 'HR_HEAD', 'COTO'];
+
+// Is a given HR stage active on this pair?
+function hrStageActive(pair, role) {
+  if (role === 'HR_SPOC') return !!pair.requireHrSpoc;
+  if (role === 'HR_HEAD') return !!pair.requireHrHead;
+  if (role === 'COTO')    return !!pair.requireCoto;
+  return false;
+}
+
+// Has every ACTIVE stage before `role` been completed? (BH must be done too.)
+// `pair` must include its `hrReviews`. Robust to skipped stages.
+function priorStagesComplete(pair, role) {
+  if (!pair.bhSubmittedOn) return false;
+  const idx = HR_ORDER.indexOf(role);
+  for (let i = 0; i < idx; i++) {
+    const r = HR_ORDER[i];
+    if (!hrStageActive(pair, r)) continue;
+    const review = (pair.hrReviews || []).find((x) => x.role === r);
+    if (!review || !review.submittedOn) return false;
+  }
+  return true;
+}
+
+// Is `role` the last active commenter stage on this pair?
+function isLastActiveStage(pair, role) {
+  const idx = HR_ORDER.indexOf(role);
+  for (let i = idx + 1; i < HR_ORDER.length; i++) {
+    if (hrStageActive(pair, HR_ORDER[i])) return false;
+  }
+  return true;
+}
+
+// Does this pair have ANY active commenter stage?
+function hasAnyHrStage(pair) {
+  return HR_ORDER.some((r) => hrStageActive(pair, r));
+}
+
+// Given the stage that just completed, return { status, locked } for the pair.
+// `stage` is 'BH' | 'HR_SPOC' | 'HR_HEAD' | 'COTO'.
+function nextStateAfter(stage, pair) {
+  if (stage === 'BH') {
+    return hasAnyHrStage(pair)
+      ? { status: 'BH_SUBMITTED', locked: false }
+      : { status: 'FINALIZED',    locked: true };
+  }
+  // HR stage: if it's the last active one, finalize; else mark its _SUBMITTED.
+  if (isLastActiveStage(pair, stage)) {
+    return { status: 'FINALIZED', locked: true };
+  }
+  const marker = stage === 'HR_SPOC' ? 'HR_SPOC_SUBMITTED'
+               : stage === 'HR_HEAD' ? 'HR_HEAD_SUBMITTED'
+               : 'BH_SUBMITTED';
+  return { status: marker, locked: false };
+}
+
 // ── Role Templates ─────────────────────────────────────────────────────────
 
 export async function getAllRoles({ includeInactive = false } = {}) {
@@ -21,7 +80,12 @@ export async function getRole(roleKey) {
 }
 
 export async function upsertRole(roleKey, roleLabel, questions, opts = {}) {
-  const { filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf } = opts;
+  const {
+    filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf,
+    // V2 commenter routing + field definitions
+    hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
+    hrSpocFields, hrHeadFields, cotoFields,
+  } = opts;
   const data = {
     roleLabel, questions,
     ...(filename    !== undefined && { filename }),
@@ -31,6 +95,16 @@ export async function upsertRole(roleKey, roleLabel, questions, opts = {}) {
     ...(bhNameCol   !== undefined && { bhNameCol }),
     ...(bhEmailCol  !== undefined && { bhEmailCol }),
     ...(includeSelf !== undefined && { includeSelf: !!includeSelf }),
+    // V2: persist commenter routing (null-able strings) + field def arrays
+    ...(hrSpocName   !== undefined && { hrSpocName }),
+    ...(hrSpocEmail  !== undefined && { hrSpocEmail }),
+    ...(hrHeadName   !== undefined && { hrHeadName }),
+    ...(hrHeadEmail  !== undefined && { hrHeadEmail }),
+    ...(cotoName     !== undefined && { cotoName }),
+    ...(cotoEmail    !== undefined && { cotoEmail }),
+    ...(hrSpocFields !== undefined && { hrSpocFields }),
+    ...(hrHeadFields !== undefined && { hrHeadFields }),
+    ...(cotoFields   !== undefined && { cotoFields }),
   };
   return prisma.roleTemplate.upsert({
     where:  { roleKey },
@@ -170,11 +244,32 @@ export async function getPairBySelfToken(selfToken) {
   });
 }
 
+// V2: resolve an HR commenter form token → { review, pair, template }.
+// The pair includes all its hrReviews (for cumulative read-only + ordering)
+// and the employee profileData (for the read-only candidate panel).
+export async function getHrReviewByToken(token) {
+  const review = await prisma.hrReview.findUnique({ where: { token } });
+  if (!review) return null;
+  const pair = await prisma.assessmentPair.findUnique({
+    where:   { pairId: review.pairId },
+    include: {
+      role: true,
+      hrReviews: true,
+      employee: { select: { profileData: true } },
+    },
+  });
+  if (!pair) return null;
+  return { review, pair, template: pair.role };
+}
+
 export async function createPair({
   empCode, empName, roleKey, cycle,
   rmName, rmEmail, bhName, bhEmail,
   selectedBy, startOn,
   requireSelf = false, selfEmail = null, selfName = null,
+  // V2: post-BH commenter stages, snapshotted from the template by the caller.
+  // Pass `{ active, name, email }` for each. Inactive stages are simply omitted.
+  hrSpoc = null, hrHead = null, coto = null,
 }) {
   // Build pairId: count existing pairs for this employee+role+cycle
   const existing = await prisma.assessmentPair.count({ where: { empCode, roleKey, cycle } });
@@ -185,6 +280,17 @@ export async function createPair({
   // only after self submission. Otherwise it starts at PENDING_RM exactly as before.
   const initialStatus = requireSelf ? 'PENDING_SELF' : 'PENDING_RM';
 
+  const requireHrSpoc = !!(hrSpoc && hrSpoc.active);
+  const requireHrHead = !!(hrHead && hrHead.active);
+  const requireCoto   = !!(coto   && coto.active);
+
+  // Pre-create one HrReview row per ACTIVE commenter stage so the token exists
+  // before any invite email is sent.
+  const hrReviewCreates = [];
+  if (requireHrSpoc) hrReviewCreates.push({ role: 'HR_SPOC', name: hrSpoc.name || null, email: hrSpoc.email || null });
+  if (requireHrHead) hrReviewCreates.push({ role: 'HR_HEAD', name: hrHead.name || null, email: hrHead.email || null });
+  if (requireCoto)   hrReviewCreates.push({ role: 'COTO',    name: coto.name   || null, email: coto.email   || null });
+
   return prisma.assessmentPair.create({
     data: {
       pairId, empCode, empName, roleKey, cycle,
@@ -193,17 +299,21 @@ export async function createPair({
       requireSelf,
       selfEmail: requireSelf ? selfEmail : null,
       selfName:  requireSelf ? selfName  : null,
+      requireHrSpoc, requireHrHead, requireCoto,
       selectedBy, selectedOn: new Date(),
       lastUpdatedBy: selectedBy, lastUpdatedOn: new Date(),
       startOn: startOn ? new Date(startOn) : null,
+      ...(hrReviewCreates.length > 0 && { hrReviews: { create: hrReviewCreates } }),
     },
   });
 }
 
-// ── Reviewer Link (one dashboard link per SELF/RM/BH per roleKey+cycle) ────
+// ── Reviewer Link (one dashboard link per role per roleKey+cycle) ──────────
+// Roles: SELF | RM | BH | HR_SPOC | HR_HEAD | COTO.
+const VALID_REVIEWER_ROLES = new Set(['SELF', 'RM', 'BH', 'HR_SPOC', 'HR_HEAD', 'COTO']);
 export async function getOrCreateReviewerLink(email, role, roleKey, cycle) {
   const normEmail = String(email || '').trim().toLowerCase();
-  const normRole  = role === 'SELF' ? 'SELF' : role === 'BH' ? 'BH' : 'RM';
+  const normRole  = VALID_REVIEWER_ROLES.has(role) ? role : 'RM';
   const existing = await prisma.reviewerLink.findUnique({
     where: { email_role_roleKey_cycle: { email: normEmail, role: normRole, roleKey, cycle } },
   });
@@ -337,6 +447,66 @@ export async function getPendingRemindersForBh() {
   });
 }
 
+// ── V2 HR commenter invite discovery ─────────────────────────────────────────
+// Returns HrReview rows (with their parent pair + employee profile) for `role`
+// that are READY to be invited: not yet invited, not yet submitted, an email
+// present, the pair not archived, and every prior active stage complete.
+// `alreadyInvited=true` flips it to the reminder set (invited but not submitted).
+export async function getPendingHrInvitesByRole(role, { alreadyInvited = false } = {}) {
+  const candidates = await prisma.hrReview.findMany({
+    where: {
+      role,
+      submittedOn: null,
+      email: { not: null },
+      ...(alreadyInvited ? { invitedOn: { not: null } } : { invitedOn: null }),
+      pair: { isArchived: false },
+    },
+    include: {
+      pair: {
+        include: {
+          hrReviews: true,
+          employee: { select: { profileData: true } },
+        },
+      },
+    },
+    orderBy: [{ email: 'asc' }],
+  });
+  // Filter to those whose prior active stages are all complete.
+  return candidates.filter((c) => priorStagesComplete(c.pair, role));
+}
+
+export async function getPendingHrRemindersByRole(role) {
+  return getPendingHrInvitesByRole(role, { alreadyInvited: true });
+}
+
+// Mark a set of HrReview rows as invited.
+export async function markHrInvited(reviewIds) {
+  if (!reviewIds || reviewIds.length === 0) return { count: 0 };
+  return prisma.hrReview.updateMany({
+    where: { id: { in: reviewIds } },
+    data:  { invitedOn: new Date() },
+  });
+}
+
+// Dashboard list for an HR commenter: every HrReview for (email, role) under
+// this roleKey+cycle, split into pending (ready, not submitted) and done.
+// Returns lightweight rows carrying the HrReview token for the form link.
+export async function getHrReviewsForDashboard({ email, role, roleKey, cycle }) {
+  const normEmail = String(email || '').trim().toLowerCase();
+  const reviews = await prisma.hrReview.findMany({
+    where: {
+      role,
+      email: { equals: normEmail, mode: 'insensitive' },
+      pair: { roleKey, cycle, isArchived: false },
+    },
+    include: {
+      pair: { include: { hrReviews: true, employee: { select: { profileData: true } } } },
+    },
+    orderBy: [{ createdAt: 'asc' }],
+  });
+  return reviews;
+}
+
 // Self-assessment submit: status flips PENDING_SELF → PENDING_RM so the
 // existing RM invite/cron path picks it up. Self does NOT lock the pair.
 export async function submitSelfAnswers(pairId, answers, performedBy) {
@@ -365,18 +535,55 @@ export async function submitRmAnswers(pairId, answers, performedBy) {
   });
 }
 
+// BH submit: previously always FINALIZED+LOCKED. In V2 the next state depends
+// on whether this pair has any active commenter stage (HR_SPOC/HR_HEAD/COTO).
 export async function submitBhAnswers(pairId, answers, performedBy) {
+  const pair = await prisma.assessmentPair.findUnique({
+    where: { pairId },
+    select: { requireHrSpoc: true, requireHrHead: true, requireCoto: true },
+  });
+  const { status, locked } = nextStateAfter('BH', pair || {});
   return prisma.assessmentPair.update({
     where: { pairId },
     data: {
       bhAnswers:    answers,
-      status:       'FINALIZED',
-      lockStatus:   'LOCKED',
+      status,
+      ...(locked ? { lockStatus: 'LOCKED' } : {}),
       bhSubmittedOn: new Date(),
       lastUpdatedBy: performedBy,
       lastUpdatedOn: new Date(),
     },
   });
+}
+
+// V2: an HR commenter submits their fields. Advances the pair to the next
+// commenter's _SUBMITTED marker, or FINALIZED+LOCKED if this is the last
+// active stage. `role` is 'HR_SPOC' | 'HR_HEAD' | 'COTO'.
+export async function submitHrReview(pairId, role, fields, performedBy) {
+  const pair = await prisma.assessmentPair.findUnique({
+    where:   { pairId },
+    include: { hrReviews: true },
+  });
+  if (!pair) throw new Error('Pair not found');
+  const { status, locked } = nextStateAfter(role, pair);
+
+  // Two writes: fill the HrReview row, advance the pair. Keep them atomic.
+  const [review] = await prisma.$transaction([
+    prisma.hrReview.update({
+      where: { pairId_role: { pairId, role } },
+      data:  { fields, submittedOn: new Date() },
+    }),
+    prisma.assessmentPair.update({
+      where: { pairId },
+      data: {
+        status,
+        ...(locked ? { lockStatus: 'LOCKED' } : {}),
+        lastUpdatedBy: performedBy,
+        lastUpdatedOn: new Date(),
+      },
+    }),
+  ]);
+  return { review, status, locked };
 }
 
 export async function deletePair(pairId) {
@@ -400,15 +607,25 @@ export async function unlockPair(pairId, performedBy) {
 
 export async function getDashboardStats(roleKey, cycle) {
   const where = { roleKey, cycle };
-  const [total, pendingSelf, pendingRm, rmSubmitted, pendingBh, finalized] = await Promise.all([
+  const [
+    total, pendingSelf, pendingRm, rmSubmitted, pendingBh,
+    awaitingHrSpoc, awaitingHrHead, awaitingCoto, finalized,
+  ] = await Promise.all([
     prisma.assessmentPair.count({ where }),
-    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_SELF' } }),
-    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_RM'   } }),
-    prisma.assessmentPair.count({ where: { ...where, status: 'RM_SUBMITTED' } }),
-    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_BH'   } }),
-    prisma.assessmentPair.count({ where: { ...where, status: 'FINALIZED'    } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_SELF'      } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_RM'        } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'RM_SUBMITTED'      } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'PENDING_BH'        } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'BH_SUBMITTED'      } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'HR_SPOC_SUBMITTED' } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'HR_HEAD_SUBMITTED' } }),
+    prisma.assessmentPair.count({ where: { ...where, status: 'FINALIZED'         } }),
   ]);
-  return { total, pendingSelf, pendingRm, rmSubmitted, pendingBh, finalized };
+  // awaitingHrSpoc = pairs at BH_SUBMITTED (BH done, waiting on HR_SPOC), etc.
+  return {
+    total, pendingSelf, pendingRm, rmSubmitted, pendingBh,
+    awaitingHrSpoc, awaitingHrHead, awaitingCoto, finalized,
+  };
 }
 
 export async function getRecentActivity(limit = 20) {
