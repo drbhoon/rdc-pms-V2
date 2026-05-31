@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Role Templates ─────────────────────────────────────────────────────────
+// One record per role. questions is a JSONB array:
+//   [{ key, label, fieldType: 'rating'|'narrative'|'number'|'date', order }]
+model RoleTemplate {
+  id         String   @id @default(cuid())
+  roleKey    String   @unique
+  roleLabel  String
+  filename   String?            // original Excel filename
+  questions  Json     @default("[]")  // [{question_key, question_label, field_type, display_order}]
+  profileCols Json?             // [{key, label, field_type}] — employee profile columns
+  rmNameCol  String?            // header that holds reviewer (RM/BM) name
+  rmEmailCol String?            // header that holds reviewer email
+  bhNameCol  String?            // header that holds approver (BH) name
+  bhEmailCol String?            // header that holds approver email
+  includeSelf Boolean @default(false) // when true, every pair launched against this template gets a self-assessment step before RM
+  isActive   Boolean  @default(true)  // soft-delete flag: false = hidden from dropdowns, history preserved
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employees Employee[]
+  pairs     AssessmentPair[]
+}
+
+// ── Employees ──────────────────────────────────────────────────────────────
+// Uploaded via Excel. Extra profile columns stored in profileData JSONB.
+model Employee {
+  id          String   @id @default(cuid())
+  empCode     String
+  empName     String
+  roleKey     String
+  email       String?            // EMP_EMAIL from Excel — used for self-assessment invites
+  profileData Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  role  RoleTemplate   @relation(fields: [roleKey], references: [roleKey])
+  pairs AssessmentPair[]
+
+  @@unique([empCode, roleKey])
+}
+
+// ── Assessment Pairs ───────────────────────────────────────────────────────
+// One pair = one complete RM+BH assessment cycle for an employee.
+// Answers stored as JSONB — fully dynamic, no schema change when questions change.
+model AssessmentPair {
+  id            String     @id @default(cuid())
+  pairId        String     @unique
+  empCode       String
+  empName       String
+  roleKey       String
+  cycle         String
+  rmName        String
+  rmEmail       String
+  bhName        String
+  bhEmail       String
+  status        PairStatus @default(PENDING_RM)
+  lockStatus    LockStatus @default(UNLOCKED)
+  selectedBy    String?
+  selectedOn    DateTime?
+  rmSubmittedOn DateTime?
+  bhSubmittedOn DateTime?
+  lastUpdatedBy String?
+  lastUpdatedOn DateTime?
+  rmToken       String     @unique @default(cuid())
+  bhToken       String     @unique @default(cuid())
+  rmAnswers     Json?
+  bhAnswers     Json?
+  // Self-assessment branch — only populated when requireSelf=true at launch.
+  // Snapshot of RoleTemplate.includeSelf at the moment HR clicked Launch, so
+  // toggling the template later doesn't retro-affect in-flight pairs.
+  requireSelf     Boolean   @default(false)
+  selfToken       String?   @unique @default(cuid())
+  selfEmail       String?            // captured at launch from Employee.email
+  selfName        String?            // typically empName — kept for future override
+  selfAnswers     Json?
+  selfSubmittedOn DateTime?
+  selfInvitedOn   DateTime?
+  isArchived    Boolean    @default(false)
+  archivedOn    DateTime?
+  archivedBy    String?
+  startOn       DateTime?  // if null, starts immediately; else cron fires invites on/after this date
+  rmInvitedOn   DateTime?  // when the RM dashboard email was sent (null until sent)
+  bhInvitedOn   DateTime?  // when the BH dashboard email was sent
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  role     RoleTemplate @relation(fields: [roleKey], references: [roleKey])
+  employee Employee     @relation(fields: [empCode, roleKey], references: [empCode, roleKey])
+  logs     AuditLog[]
+}
+
+// ── Reviewer Link ──────────────────────────────────────────────────────────
+// One persistent link per (email, role=RM|BH, roleKey, cycle).
+// Used to give an RM/BH a single dashboard URL regardless of how many
+// assessments they have in the cycle.
+model ReviewerLink {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid())
+  email     String
+  role      String   // "RM" or "BH"
+  roleKey   String
+  cycle     String
+  createdAt DateTime @default(now())
+
+  @@unique([email, role, roleKey, cycle])
+  @@index([email])
+}
+
+// ── Audit Log ──────────────────────────────────────────────────────────────
+model AuditLog {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  action      String
+  pairId      String?
+  empCode     String?
+  empName     String?
+  roleKey     String?
+  cycle       String?
+  performedBy String
+  details     Json?
+
+  pair AssessmentPair? @relation(fields: [pairId], references: [pairId])
+}
+
+// ── HR Users ───────────────────────────────────────────────────────────────
+model HrUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      HrRole   @default(HR_ADMIN)
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+enum PairStatus {
+  PENDING_SELF
+  PENDING_RM
+  RM_SUBMITTED
+  PENDING_BH
+  FINALIZED
+}
+
+enum LockStatus {
+  UNLOCKED
+  LOCKED
+}
+
+enum HrRole {
+  HR_ADMIN
+  HR_SUPER_ADMIN
+}

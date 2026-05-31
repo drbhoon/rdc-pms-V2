@@ -1,0 +1,38 @@
+{
+  "name": "rdc-pms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RDC Performance Management System – RM/BH workflow via Google Sheets",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "prisma db push --accept-data-loss && next start",
+    "lint": "next lint",
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.6.0",
+    "google-auth-library": "^9.14.0",
+    "googleapis": "^140.0.0",
+    "next": "^14.2.0",
+    "nodemailer": "^8.0.4",
+    "prisma": "^5.22.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "uuid": "^9.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.0"
+  }
+}

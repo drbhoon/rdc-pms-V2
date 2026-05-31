@@ -1,0 +1,49 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# environment variables – NEVER commit real credentials
+.env
+.env.local
+.env.*.local
+
+# service account / OAuth key files
+serviceAccount.json
+credentials.json
+OA-*.json
+oauth_client*.json
+refresh_token.txt
+
+# Prisma generated client
+/src/generated/
+
+# dev utility scripts
+get-token.js
+dev.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+/src/generated/prisma
+
+# graphify knowledge-graph artifacts
+graphify-out/
+.graphify_*
+
+# generated docs / test spreadsheets
+RDC_PARAKH_User_Guide.docx
+RDC_PARAKH_User_Guide.pdf
+*.xlsx
+~$*.xlsx

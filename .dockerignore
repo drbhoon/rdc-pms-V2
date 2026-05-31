@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+.env.local
+.env*.local
+*.log
+.railway
+
+# Outputs we don't want bloating the build context
+graphify-out
+unpacked_check
+RDC_PARAKH_User_Guide.pdf
+
+# Excel test files
+*.xlsx
+~$*.xlsx
