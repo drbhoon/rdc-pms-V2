@@ -21,10 +21,17 @@ import {
   getPendingRemindersForSelf,
   getPendingRemindersForRm,
   getPendingRemindersForBh,
+  getPendingHrInvitesByRole,
+  getPendingHrRemindersByRole,
   markInvited,
+  markHrInvited,
   getRole,
 } from './queries';
 import { sendReviewerBatch } from './mailer';
+
+// V2 commenter roles, in pipeline order.
+const HR_ROLES = ['HR_SPOC', 'HR_HEAD', 'COTO'];
+const HR_RESULT_KEY = { HR_SPOC: 'hrSpoc', HR_HEAD: 'hrHead', COTO: 'coto' };
 
 function appUrl() {
   return (
@@ -74,6 +81,47 @@ async function buildRoleLabelCache(roleKeys) {
   return cache;
 }
 
+// V2: process one HR commenter role for either invites or reminders.
+// HR stages are keyed off HrReview rows (each has its own email + the parent
+// pair). We group by (email, roleKey, cycle) — like SELF/RM/BH — so one
+// commenter gets one dashboard email listing all the pairs awaiting them.
+async function processHrRole({ role, base, isReminder, result }) {
+  const reviews = isReminder
+    ? await getPendingHrRemindersByRole(role)
+    : await getPendingHrInvitesByRole(role);
+  if (reviews.length === 0) return;
+
+  const labels = await buildRoleLabelCache([...new Set(reviews.map((r) => r.pair.roleKey))]);
+  const groups = groupBy(reviews, (r) =>
+    `${(r.email || '').toLowerCase()}|${r.pair.roleKey}|${r.pair.cycle}`
+  );
+  const gk = HR_RESULT_KEY[role];
+
+  for (const [, groupReviews] of groups) {
+    const first = groupReviews[0];
+    if (!first.email) continue;
+    try {
+      const link = await getOrCreateReviewerLink(first.email, role, first.pair.roleKey, first.pair.cycle);
+      const dashboardUrl = `${base}/reviewer/${link.token}`;
+      await sendReviewerBatch({
+        to:         first.email,
+        name:       first.name || first.email,
+        role,
+        roleLabel:  labels[first.pair.roleKey] || first.pair.roleKey,
+        cycle:      first.pair.cycle,
+        pairs:      groupReviews.map((r) => r.pair),  // pair carries empName/empCode/cycle/employee.profileData
+        dashboardUrl,
+        isReminder,
+      });
+      if (!isReminder) await markHrInvited(groupReviews.map((r) => r.id));
+      result[`${gk}GroupsEmailed`] = (result[`${gk}GroupsEmailed`] || 0) + 1;
+      result[`${gk}PairsMarked`]   = (result[`${gk}PairsMarked`]   || 0) + groupReviews.length;
+    } catch (e) {
+      result.errors.push(`${role}${isReminder ? '-R' : ''} ${first.email} ${first.pair.roleKey}/${first.pair.cycle}: ${e.message}`);
+    }
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Invites — first-time emails, respects startOn
 // ────────────────────────────────────────────────────────────────────────────
@@ -87,6 +135,9 @@ export async function runInvites() {
     rmPairsMarked:     0,
     bhGroupsEmailed:   0,
     bhPairsMarked:     0,
+    hrSpocGroupsEmailed: 0, hrSpocPairsMarked: 0,
+    hrHeadGroupsEmailed: 0, hrHeadPairsMarked: 0,
+    cotoGroupsEmailed:   0, cotoPairsMarked:   0,
     errors:            [],
   };
 
@@ -184,6 +235,11 @@ export async function runInvites() {
     }
   }
 
+  // ── HR commenter stages (HR_SPOC → HR_HEAD → COTO) ──
+  for (const role of HR_ROLES) {
+    await processHrRole({ role, base, isReminder: false, result });
+  }
+
   return result;
 }
 
@@ -200,6 +256,9 @@ export async function runReminders() {
     rmPairsIncluded:   0,
     bhGroupsEmailed:   0,
     bhPairsIncluded:   0,
+    hrSpocGroupsEmailed: 0, hrSpocPairsMarked: 0,
+    hrHeadGroupsEmailed: 0, hrHeadPairsMarked: 0,
+    cotoGroupsEmailed:   0, cotoPairsMarked:   0,
     errors:            [],
   };
 
@@ -286,6 +345,11 @@ export async function runReminders() {
     } catch (e) {
       result.errors.push(`BH-R ${first.bhEmail} ${first.roleKey}/${first.cycle}: ${e.message}`);
     }
+  }
+
+  // ── HR commenter reminders (HR_SPOC → HR_HEAD → COTO) ──
+  for (const role of HR_ROLES) {
+    await processHrRole({ role, base, isReminder: true, result });
   }
 
   return result;

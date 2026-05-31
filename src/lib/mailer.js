@@ -198,6 +198,27 @@ export async function sendReviewerBatch({ to, name, role, roleLabel, cycle, pair
     subject  = isReminder
       ? `Reminder: Pending Assessments — ${roleLabel} · ${cycle}`
       : `Review Required — ${roleLabel} · ${cycle}`;
+  } else if (role === 'HR_SPOC') {
+    roleWord = 'Add Comments';
+    verb     = 'add your HR-SPOC comments for';
+    btnColor = '#0d9488'; // teal
+    subject  = isReminder
+      ? `Reminder: HR-SPOC Comments Pending — ${roleLabel} · ${cycle}`
+      : `Action Required: HR-SPOC Comments — ${roleLabel} · ${cycle}`;
+  } else if (role === 'HR_HEAD') {
+    roleWord = 'Add Comments';
+    verb     = 'add your HR-HEAD comments for';
+    btnColor = '#7c3aed'; // purple
+    subject  = isReminder
+      ? `Reminder: HR-HEAD Comments Pending — ${roleLabel} · ${cycle}`
+      : `Action Required: HR-HEAD Review — ${roleLabel} · ${cycle}`;
+  } else if (role === 'COTO') {
+    roleWord = 'Approve & Comment';
+    verb     = 'review, approve and comment on';
+    btnColor = '#dc2626'; // red
+    subject  = isReminder
+      ? `Reminder: COTO Approval Pending — ${roleLabel} · ${cycle}`
+      : `Action Required: COTO Approval — ${roleLabel} · ${cycle}`;
   } else {
     roleWord = 'Complete';
     verb     = 'complete';
@@ -206,6 +227,7 @@ export async function sendReviewerBatch({ to, name, role, roleLabel, cycle, pair
       ? `Reminder: Pending Assessments — ${roleLabel} · ${cycle}`
       : `Review Required — ${roleLabel} · ${cycle}`;
   }
+  const isHrCommenter = role === 'HR_SPOC' || role === 'HR_HEAD' || role === 'COTO';
 
   const tableRows = pairs.map((p, i) => `
     <tr>

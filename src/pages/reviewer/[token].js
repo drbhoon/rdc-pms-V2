@@ -57,12 +57,20 @@ export default function ReviewerDashboard() {
   }
 
   const { reviewer, role, pending, done } = data;
+  // Per-role display config covering SELF/RM/BH + the V2 commenter roles.
+  const ROLE_CFG = {
+    SELF:    { title: 'Self-Assessment', accentText: 'text-indigo-700', formBase: '/form/self',    headCls: 'bg-indigo-100 text-indigo-700', pillCls: 'bg-indigo-50 text-indigo-700 border-indigo-200',  pillText: 'Complete your self-assessment' },
+    RM:      { title: 'Reviewer (RM)',   accentText: 'text-blue-700',   formBase: '/form/rm',      headCls: 'bg-blue-100 text-blue-700',     pillCls: 'bg-orange-50 text-orange-700 border-orange-200', pillText: 'Pending your input' },
+    BH:      { title: 'Approver (BH)',   accentText: 'text-emerald-700', formBase: '/form/bh',     headCls: 'bg-emerald-100 text-emerald-700', pillCls: 'bg-purple-50 text-purple-700 border-purple-200', pillText: 'Review & Finalise' },
+    HR_SPOC: { title: 'HR-SPOC Review',  accentText: 'text-teal-700',   formBase: '/form/hr_spoc', headCls: 'bg-teal-100 text-teal-700',     pillCls: 'bg-teal-50 text-teal-700 border-teal-200',       pillText: 'Add your comments' },
+    HR_HEAD: { title: 'HR-HEAD Review',  accentText: 'text-violet-700', formBase: '/form/hr_head', headCls: 'bg-violet-100 text-violet-700', pillCls: 'bg-violet-50 text-violet-700 border-violet-200', pillText: 'Add your comments' },
+    COTO:    { title: 'COTO Approval',   accentText: 'text-rose-700',   formBase: '/form/coto',    headCls: 'bg-rose-100 text-rose-700',     pillCls: 'bg-rose-50 text-rose-700 border-rose-200',       pillText: 'Approve & comment' },
+  };
+  const cfg = ROLE_CFG[reviewer.role] || ROLE_CFG.RM;
   const isSelf = reviewer.role === 'SELF';
-  const isBh   = reviewer.role === 'BH';
-  const title    = isSelf ? 'Self-Assessment' : isBh ? 'Approver (BH)' : 'Reviewer (RM)';
-  const accentBg = isSelf ? 'bg-indigo-600' : isBh ? 'bg-emerald-600' : 'bg-blue-600';
-  const accentText = isSelf ? 'text-indigo-700' : isBh ? 'text-emerald-700' : 'text-blue-700';
-  const formBase = isSelf ? '/form/self' : isBh ? '/form/bh' : '/form/rm';
+  const title = cfg.title;
+  const accentText = cfg.accentText;
+  const formBase = cfg.formBase;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -86,7 +94,7 @@ export default function ReviewerDashboard() {
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-800">
-              {isSelf ? 'Your Self-Assessment' : 'Pending Assessments'} <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs ${isSelf ? 'bg-indigo-100 text-indigo-700' : isBh ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{pending.length}</span>
+              {isSelf ? 'Your Self-Assessment' : 'Pending Assessments'} <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs ${cfg.headCls}`}>{pending.length}</span>
             </h2>
             <button onClick={load} className="text-xs text-slate-400 hover:text-slate-600">Refresh</button>
           </div>
@@ -112,12 +120,8 @@ export default function ReviewerDashboard() {
                       <div className="text-xs text-slate-400 font-mono truncate">{p.empCode} · {p.roleKey}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                        isSelf ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                        : isBh ? 'bg-purple-50 text-purple-700 border-purple-200'
-                        : 'bg-orange-50 text-orange-700 border-orange-200'
-                      }`}>
-                        {isSelf ? 'Complete your self-assessment' : isBh ? 'Review & Finalise' : 'Pending your input'}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.pillCls}`}>
+                        {cfg.pillText}
                       </span>
                       <svg className={`w-4 h-4 ${accentText}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
