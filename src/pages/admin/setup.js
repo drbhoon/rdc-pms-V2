@@ -945,13 +945,39 @@ export default function SetupPage({ user }) {
                 <h2 className="text-sm font-semibold text-slate-700">Upload Assessment Excel</h2>
               </div>
               <UploadZone onParsed={handleParsed} />
+
+              {/* What goes in the Excel */}
               <div className="mt-6 p-4 bg-slate-50 rounded-xl text-xs text-slate-500 space-y-1.5">
-                <p className="font-semibold text-slate-600">What happens automatically:</p>
-                <p>• Column headers become assessment questions</p>
-                <p>• Routing columns (BM_Name, BH_Name, RM_Email etc.) auto-detected</p>
-                <p>• Numbered columns (1. ... 14. ...) become rating questions</p>
-                <p>• Profile fields (Qualification, Designation etc.) stored but not scored</p>
-                <p>• You can adjust any classification before creating the template</p>
+                <p className="font-semibold text-slate-600">Step 1 — put these in your Assessment Excel (column headers only):</p>
+                <p>• <strong>Numbered columns</strong> (1. … 14. …) become the <strong>rating questions</strong> RM &amp; BH answer.</p>
+                <p>• <strong>Narrative columns</strong> (Comments, Recommendation…) become text questions.</p>
+                <p>• <strong>Profile fields</strong> (Qualification, Designation…) are stored for reference, not scored.</p>
+                <p>• <strong>HR comment columns</strong> — name them <code className="font-mono bg-white px-1 rounded">HR_SPOC_*</code>, <code className="font-mono bg-white px-1 rounded">HR_HEAD_*</code>, <code className="font-mono bg-white px-1 rounded">COTO_*</code> (e.g. HR_SPOC_COMMENTS, COTO_APPROVAL). They're auto-sorted into the HR stages, NOT asked of RM/BH.</p>
+                <p className="pt-1 text-slate-400">You can re-classify any column on the next screen before saving.</p>
+              </div>
+
+              {/* What is NOT in the Excel — added on the next screen */}
+              <div className="mt-3 p-4 bg-indigo-50 rounded-xl text-xs text-indigo-900 space-y-1.5 border border-indigo-100">
+                <p className="font-semibold text-indigo-800">Step 2 — added on the next screen (NOT in the Excel):</p>
+                <p>• <strong>HR functionaries</strong> — type the <strong>HR-SPOC, HR-HEAD and COTO name + email</strong> once, in the "HR Review Stages" section. These are the same people for every employee in this template.</p>
+                <p>• A stage runs <strong>only if</strong> it has at least one field <em>and</em> an email. Leave a stage blank to skip it.</p>
+                <p className="pt-1 text-indigo-700">Note: <strong>RM &amp; BH</strong> are per-employee and come from the <strong>Employees Excel</strong> (RM_Email, BH_Email), not from here.</p>
+              </div>
+
+              {/* The full pipeline */}
+              <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs text-slate-500 space-y-1.5">
+                <p className="font-semibold text-slate-600">How the assessment then rolls out (each person emailed automatically in turn):</p>
+                <p className="text-slate-700 leading-relaxed">
+                  <span className="font-semibold text-indigo-700">Self</span> <span className="text-slate-400">(optional)</span> →
+                  <span className="font-semibold text-blue-700"> RM</span> →
+                  <span className="font-semibold text-emerald-700"> BH</span> →
+                  <span className="font-semibold text-teal-700"> HR-SPOC</span> →
+                  <span className="font-semibold text-violet-700"> HR-HEAD</span> →
+                  <span className="font-semibold text-rose-700"> COTO</span> →
+                  <span className="font-semibold text-green-700"> Finalised</span>
+                </p>
+                <p>• Each reviewer only sees the earlier inputs <strong>read-only</strong> and fills only their own part.</p>
+                <p>• Skipped stages are jumped automatically — the assessment finalises after the last active stage.</p>
               </div>
             </div>
           ) : (
