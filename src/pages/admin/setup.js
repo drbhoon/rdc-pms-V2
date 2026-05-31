@@ -11,6 +11,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import AdminLayout from '../../components/AdminLayout';
+import HrStagesEditor, { ActivationSummary } from '../../components/HrStagesEditor';
+
+// Seed HR-stage field definitions from auto-detected HR_*/COTO_* columns.
+// `cols` = [{ header, type }] where type is hr_spoc | hr_head | coto.
+function seedHrStagesFromCols(cols) {
+  const mk = (type) => cols
+    .filter((c) => c.type === type)
+    .map((c) => ({ key: c.header.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, ''), label: c.header, fieldType: 'narrative' }));
+  return {
+    hrSpocFields: mk('hr_spoc'),
+    hrHeadFields: mk('hr_head'),
+    cotoFields:   mk('coto'),
+  };
+}
 
 // ── Column Classification ─────────────────────────────────────────────────────
 // Returns one of: rm_name | rm_email | bh_name | bh_email |
@@ -24,6 +38,13 @@ function classifyHeader(header) {
   const raw = header.trim();
   const h   = raw.toUpperCase().replace(/\s+/g, '_');
   const orig = raw.toUpperCase();
+
+  // ── V2: HR commenter field columns (HR_SPOC_* / HR_HEAD_* / COTO_*).
+  // These are NOT assessment questions; they belong to the post-BH commenter
+  // stages and are configured in the HR Review Stages editor, not here.
+  if (/^HR[_\s-]?SPOC[_\s-]/i.test(raw)) return 'hr_spoc';
+  if (/^HR[_\s-]?HEAD[_\s-]/i.test(raw)) return 'hr_head';
+  if (/^COTO[_\s-]/i.test(raw))          return 'coto';
 
   // ── Routing: reviewer (RM / BM / Reporting Manager)
   if (/^(RM|BM)_/i.test(raw)) {
@@ -198,6 +219,10 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   );
   const [roleKey, setRoleKey]   = useState(slugify(filename));
   const [includeSelf, setIncludeSelf] = useState(false);
+  // V2: HR commenter stages, seeded from any detected HR_*/COTO_* columns.
+  const [hrStages, setHrStages] = useState(() =>
+    seedHrStagesFromCols(headers.map((h) => ({ header: h, type: classifyHeader(h) })))
+  );
   const [saving, setSaving]     = useState(false);
   const [toast, setToast]       = useState(null);
 
@@ -268,6 +293,16 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
           bhNameCol:  bhNameCol  || null,
           bhEmailCol: bhEmailCol || null,
           includeSelf: !!includeSelf,
+          // V2 commenter stages
+          hrSpocName:  hrStages.hrSpocName  || null,
+          hrSpocEmail: hrStages.hrSpocEmail || null,
+          hrHeadName:  hrStages.hrHeadName  || null,
+          hrHeadEmail: hrStages.hrHeadEmail || null,
+          cotoName:    hrStages.cotoName    || null,
+          cotoEmail:   hrStages.cotoEmail   || null,
+          hrSpocFields: hrStages.hrSpocFields || [],
+          hrHeadFields: hrStages.hrHeadFields || [],
+          cotoFields:   hrStages.cotoFields   || [],
         }),
       });
       const data = await res.json();
@@ -336,6 +371,16 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
             for the few evaluative questions (e.g. Salary Recommendation) that should not be shown to the employee.
           </div>
         </div>
+
+        {/* Pipeline activation summary */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <ActivationSummary includeSelf={includeSelf} value={hrStages} />
+        </div>
+      </div>
+
+      {/* V2: HR commenter stages */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <HrStagesEditor value={hrStages} onChange={setHrStages} />
       </div>
 
       {/* Routing fields */}
@@ -557,12 +602,22 @@ function TemplateList({ refreshKey }) {
 
   useEffect(load, [load, refreshKey]);
 
+  // Collect the HR-stage fields off a template/edit into the editor's value shape.
+  function hrStagesOf(src) {
+    return {
+      hrSpocName: src.hrSpocName ?? '', hrSpocEmail: src.hrSpocEmail ?? '', hrSpocFields: src.hrSpocFields || [],
+      hrHeadName: src.hrHeadName ?? '', hrHeadEmail: src.hrHeadEmail ?? '', hrHeadFields: src.hrHeadFields || [],
+      cotoName:   src.cotoName   ?? '', cotoEmail:   src.cotoEmail   ?? '', cotoFields:   src.cotoFields   || [],
+    };
+  }
+
   // Pull the current edited view of a template (falls back to original)
   function viewOf(role) {
     const e = edits[role.roleKey];
     return {
       includeSelf: e?.includeSelf ?? !!role.includeSelf,
       questions:   e?.questions   ?? (role.questions || []),
+      hrStages:    e?.hrStages    ?? hrStagesOf(role),
     };
   }
   function isDirty(roleKey) { return edits[roleKey] !== undefined; }
@@ -573,6 +628,7 @@ function TemplateList({ refreshKey }) {
       const current = prev[roleKey] || {
         includeSelf: !!role?.includeSelf,
         questions:   role?.questions || [],
+        hrStages:    role ? hrStagesOf(role) : {},
       };
       return { ...prev, [roleKey]: { ...current, ...patch } };
     });
@@ -616,6 +672,16 @@ function TemplateList({ refreshKey }) {
           bhEmailCol:  role.bhEmailCol ?? null,
           filename:    role.filename ?? null,
           includeSelf: !!view.includeSelf,
+          // V2 commenter stages
+          hrSpocName:  view.hrStages.hrSpocName  || null,
+          hrSpocEmail: view.hrStages.hrSpocEmail || null,
+          hrHeadName:  view.hrStages.hrHeadName  || null,
+          hrHeadEmail: view.hrStages.hrHeadEmail || null,
+          cotoName:    view.hrStages.cotoName    || null,
+          cotoEmail:   view.hrStages.cotoEmail   || null,
+          hrSpocFields: view.hrStages.hrSpocFields || [],
+          hrHeadFields: view.hrStages.hrHeadFields || [],
+          cotoFields:   view.hrStages.cotoFields   || [],
         }),
       });
       let data = {};
@@ -753,9 +819,22 @@ function TemplateList({ refreshKey }) {
                         For example, an existing pair in <em>PENDING_RM</em> will continue straight to RM (no self step) even after you save this change.
                       </div>
                     )}
+                    <div className="mt-3">
+                      <ActivationSummary includeSelf={view.includeSelf} value={view.hrStages} />
+                    </div>
                   </div>
                 );
               })()}
+
+              {/* V2: HR commenter stages (editable) */}
+              {expanded === r.roleKey && (
+                <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/40">
+                  <HrStagesEditor
+                    value={view.hrStages}
+                    onChange={(next) => setRoleEdit(r.roleKey, { hrStages: next })}
+                  />
+                </div>
+              )}
 
               {/* Questions table */}
               {expanded === r.roleKey && view.questions?.length > 0 && (

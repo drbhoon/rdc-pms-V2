@@ -34,6 +34,9 @@ export default async function handler(req, res) {
       filename, profileCols,
       rmNameCol, rmEmailCol, bhNameCol, bhEmailCol,
       includeSelf,
+      // V2 commenter routing + field definitions
+      hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
+      hrSpocFields, hrHeadFields, cotoFields,
     } = req.body || {};
 
     if (!roleKey || !roleLabel)
@@ -44,6 +47,8 @@ export default async function handler(req, res) {
     try {
       const role = await upsertRole(roleKey, roleLabel, questions, {
         filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf,
+        hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
+        hrSpocFields, hrHeadFields, cotoFields,
       });
       return res.status(200).json({ role });
     } catch (err) {
