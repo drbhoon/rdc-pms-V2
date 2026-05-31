@@ -8,11 +8,14 @@ import AdminLayout from '../../components/AdminLayout';
 // ── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
-    PENDING_SELF: { label: 'Awaiting Self', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:   { label: 'Awaiting RM',   cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED: { label: 'Awaiting BH',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    PENDING_BH:   { label: 'Awaiting BH',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    FINALIZED:    { label: '✓ Finalised',   cls: 'bg-green-100  text-green-700  border-green-200'  },
+    PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_BH:        { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
+    HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
+    HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
+    FINALIZED:         { label: '✓ Finalised',      cls: 'bg-green-100  text-green-700  border-green-200'  },
   };
   const { label, cls } = map[status] || { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
   return (
@@ -290,9 +293,9 @@ export default function DashboardPage({ user }) {
       )}
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
         {loadingStats && !stats ? (
-          Array.from({ length: 6 }).map((_, i) => (
+          Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-slate-200 h-24 animate-pulse" />
           ))
         ) : (
@@ -300,8 +303,10 @@ export default function DashboardPage({ user }) {
             <StatCard label="Total Selected"  value={stats?.total ?? stats?.totalSelected} borderColor="border-l-blue-500"   textColor="text-blue-600"   />
             <StatCard label="Awaiting Self"   value={stats?.pendingSelf}   borderColor="border-l-indigo-500" textColor="text-indigo-600" />
             <StatCard label="Awaiting RM"     value={stats?.pendingRm}     borderColor="border-l-orange-500" textColor="text-orange-600" />
-            <StatCard label="RM Submitted"    value={stats?.rmSubmitted}   borderColor="border-l-purple-500" textColor="text-purple-600" />
-            <StatCard label="Awaiting BH"     value={stats?.pendingBh}     borderColor="border-l-yellow-500" textColor="text-yellow-600" />
+            <StatCard label="Awaiting BH"     value={stats?.rmSubmitted}   borderColor="border-l-purple-500" textColor="text-purple-600" />
+            <StatCard label="Awaiting HR-SPOC" value={stats?.awaitingHrSpoc} borderColor="border-l-teal-500"   textColor="text-teal-600"   />
+            <StatCard label="Awaiting HR-HEAD" value={stats?.awaitingHrHead} borderColor="border-l-violet-500" textColor="text-violet-600" />
+            <StatCard label="Awaiting COTO"   value={stats?.awaitingCoto}  borderColor="border-l-rose-500"   textColor="text-rose-600"   />
             <StatCard label="Finalised"       value={stats?.finalized}     borderColor="border-l-green-500"  textColor="text-green-600"  />
           </>
         )}

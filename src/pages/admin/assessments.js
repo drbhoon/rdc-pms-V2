@@ -8,11 +8,14 @@ import AdminLayout from '../../components/AdminLayout';
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
-    PENDING_SELF: { label: 'Awaiting Self', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:   { label: 'Awaiting RM',   cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED: { label: 'Awaiting BH',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    PENDING_BH:   { label: 'Awaiting BH',   cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-    FINALIZED:    { label: '✓ Finalised',   cls: 'bg-green-100  text-green-700  border-green-200'  },
+    PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_BH:        { label: 'Awaiting BH',      cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+    BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
+    HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
+    HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
+    FINALIZED:         { label: '✓ Finalised',      cls: 'bg-green-100  text-green-700  border-green-200'  },
   };
   const { label, cls } = map[status] || { label: status || 'Not Started', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
   return (
@@ -20,6 +23,29 @@ function StatusBadge({ status }) {
       {label}
     </span>
   );
+}
+
+// Returns the copy-link { label, url } for whichever stage a pair is currently
+// awaiting, or null when finalized / not launched. Single "Current Link" cell
+// keeps the table narrow across the 6-stage pipeline.
+function currentLink(pair, host) {
+  if (!pair) return null;
+  switch (pair.status) {
+    case 'PENDING_SELF':
+      return pair.selfToken ? { label: 'Self Link', url: `${host}/form/self/${pair.selfToken}` } : null;
+    case 'PENDING_RM':
+      return pair.rmToken ? { label: 'RM Link', url: `${host}/form/rm/${pair.rmToken}` } : null;
+    case 'RM_SUBMITTED':
+      return pair.bhToken ? { label: 'BH Link', url: `${host}/form/bh/${pair.bhToken}` } : null;
+    case 'BH_SUBMITTED':
+      return pair.hrSpoc?.token ? { label: 'HR-SPOC Link', url: `${host}/form/hr_spoc/${pair.hrSpoc.token}` } : null;
+    case 'HR_SPOC_SUBMITTED':
+      return pair.hrHead?.token ? { label: 'HR-HEAD Link', url: `${host}/form/hr_head/${pair.hrHead.token}` } : null;
+    case 'HR_HEAD_SUBMITTED':
+      return pair.coto?.token ? { label: 'COTO Link', url: `${host}/form/coto/${pair.coto.token}` } : null;
+    default:
+      return null;
+  }
 }
 
 // ── Copy button ───────────────────────────────────────────────────────────────
@@ -596,7 +622,7 @@ export default function AssessmentsPage({ user }) {
                         title="Select all unlaunched" />
                     )}
                   </th>
-                  {['Emp Code', 'Name', 'RM · BH · Profile', 'Status', 'Self Link', 'RM Link', 'BH Link', 'Action'].map((h) => (
+                  {['Emp Code', 'Name', 'RM · BH · Profile', 'Status', 'Current Link', 'Action'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -624,31 +650,16 @@ export default function AssessmentsPage({ user }) {
                       <td className="px-4 py-3">
                         {pair ? <StatusBadge status={pair.status} /> : <span className="text-xs text-slate-400">Not launched</span>}
                       </td>
-                      {/* Self Link — only meaningful when this pair was launched with requireSelf=true */}
+                      {/* Current Link — the copy link for whichever stage is awaited now */}
                       <td className="px-4 py-3">
-                        {pair?.requireSelf && pair?.selfToken
-                          ? (pair.status === 'PENDING_SELF'
-                              ? <CopyBtn text={`${host}/form/self/${pair.selfToken}`} label="Self Link" />
-                              : <span className="inline-flex items-center px-2 py-1 text-xs text-slate-400 bg-slate-50 rounded-md" title="Self-assessment already submitted">used</span>)
-                          : <span className="text-slate-300 text-xs" title="Template does not require self-assessment">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {pair?.rmToken
-                          ? (pair.status === 'PENDING_SELF'
-                              ? <span className="inline-flex items-center px-2 py-1 text-xs text-slate-300 bg-slate-50 rounded-md cursor-not-allowed" title="Unlocks when employee submits self-assessment">locked</span>
-                              : pair.status === 'FINALIZED'
-                                  ? <span className="inline-flex items-center px-2 py-1 text-xs text-slate-400 bg-slate-50 rounded-md" title="Form submitted and locked">used</span>
-                                  : <CopyBtn text={`${host}/form/rm/${pair.rmToken}`} label="RM Link" />)
-                          : <span className="text-slate-300 text-xs">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {pair?.bhToken
-                          ? (pair.status === 'PENDING_SELF' || pair.status === 'PENDING_RM'
-                              ? <span className="inline-flex items-center px-2 py-1 text-xs text-slate-300 bg-slate-50 rounded-md cursor-not-allowed" title="Unlocks when RM submits">locked</span>
-                              : pair.status === 'FINALIZED'
-                                  ? <span className="inline-flex items-center px-2 py-1 text-xs text-slate-400 bg-slate-50 rounded-md" title="Form submitted and locked">used</span>
-                                  : <CopyBtn text={`${host}/form/bh/${pair.bhToken}`} label="BH Link" />)
-                          : <span className="text-slate-300 text-xs">—</span>}
+                        {(() => {
+                          if (!pair) return <span className="text-slate-300 text-xs">—</span>;
+                          const cur = currentLink(pair, host);
+                          if (cur) return <CopyBtn text={cur.url} label={cur.label} />;
+                          if (pair.status === 'FINALIZED')
+                            return <span className="inline-flex items-center px-2 py-1 text-xs text-green-700 bg-green-50 rounded-md" title="All stages complete">✓ done</span>;
+                          return <span className="text-slate-300 text-xs">—</span>;
+                        })()}
                       </td>
                       <td className="px-4 py-3 space-x-2 flex items-center">
                         {!pair ? (
@@ -656,37 +667,6 @@ export default function AssessmentsPage({ user }) {
                             className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-all"
                             title="Edit routing info before launching">
                             Edit & Launch
-                          </button>
-                        ) : pair.status === 'PENDING_SELF' || pair.status === 'PENDING_RM' ? (
-                          <>
-                            <button
-                              onClick={() => handleResend(pair.pairId, emp.empName)}
-                              disabled={resending === pair.pairId}
-                              className="rounded-lg border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 transition-all flex items-center gap-1"
-                              title="Force-resend the invite email to the current reviewer">
-                              <svg className={`w-3 h-3 ${resending === pair.pairId ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                              </svg>
-                              {resending === pair.pairId ? '…' : 'Resend'}
-                            </button>
-                            <button
-                              onClick={() => handleDeletePair(pair.pairId, emp.empName)}
-                              disabled={deleting === pair.pairId}
-                              className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
-                              title="Delete this pending assessment to relaunch or reroute">
-                              {deleting === pair.pairId ? '…' : 'Delete'}
-                            </button>
-                          </>
-                        ) : pair.status === 'RM_SUBMITTED' ? (
-                          <button
-                            onClick={() => handleResend(pair.pairId, emp.empName)}
-                            disabled={resending === pair.pairId}
-                            className="rounded-lg border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 transition-all flex items-center gap-1"
-                            title="Force-resend the BH invite email">
-                            <svg className={`w-3 h-3 ${resending === pair.pairId ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                            </svg>
-                            {resending === pair.pairId ? '…' : 'Resend BH'}
                           </button>
                         ) : pair.status === 'FINALIZED' ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700" title="Assessment completed and locked">
@@ -696,7 +676,28 @@ export default function AssessmentsPage({ user }) {
                             Completed
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">—</span>
+                          <>
+                            {/* Resend only for SELF/RM/BH stages (resend-invite endpoint scope) */}
+                            {(pair.status === 'PENDING_SELF' || pair.status === 'PENDING_RM' || pair.status === 'RM_SUBMITTED') && (
+                              <button
+                                onClick={() => handleResend(pair.pairId, emp.empName)}
+                                disabled={resending === pair.pairId}
+                                className="rounded-lg border border-emerald-300 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 transition-all flex items-center gap-1"
+                                title="Force-resend the invite email to the current reviewer">
+                                <svg className={`w-3 h-3 ${resending === pair.pairId ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                                </svg>
+                                {resending === pair.pairId ? '…' : 'Resend'}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeletePair(pair.pairId, emp.empName)}
+                              disabled={deleting === pair.pairId}
+                              className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
+                              title="Delete this in-progress assessment to relaunch or reroute">
+                              {deleting === pair.pairId ? '…' : 'Delete'}
+                            </button>
+                          </>
                         )}
                       </td>
                     </tr>

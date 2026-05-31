@@ -9,10 +9,13 @@ import AdminLayout from '../../components/AdminLayout';
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
-    PENDING_SELF: { label: 'Awaiting Self', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:   { label: 'Awaiting RM',   cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED: { label: 'Awaiting BH',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    FINALIZED:    { label: '✓ Finalised',   cls: 'bg-green-100  text-green-700  border-green-200'  },
+    PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
+    HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
+    HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
+    FINALIZED:         { label: '✓ Finalised',      cls: 'bg-green-100  text-green-700  border-green-200'  },
   };
   const { label, cls } = map[status] || { label: status || '—', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
   return (

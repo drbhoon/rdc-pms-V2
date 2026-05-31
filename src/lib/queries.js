@@ -215,7 +215,7 @@ export async function getPairsByRoleAndCycle(roleKey, cycle) {
   return prisma.assessmentPair.findMany({
     where:   { roleKey, cycle },
     orderBy: { empCode: 'asc' },
-    include: { employee: { select: { profileData: true } } },
+    include: { employee: { select: { profileData: true } }, hrReviews: true },
   });
 }
 

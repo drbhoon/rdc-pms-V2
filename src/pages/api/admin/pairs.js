@@ -17,6 +17,11 @@ export default async function handler(req, res) {
   try {
     const rows = await getPairsByRoleAndCycle(roleKey, cycle);
 
+    const hrTok = (p, role) => {
+      const r = (p.hrReviews || []).find((x) => x.role === role);
+      return r ? { token: r.token, submittedOn: r.submittedOn } : null;
+    };
+
     const pairs = rows.map((p) => ({
       pairId:        p.pairId,
       empCode:       p.empCode,
@@ -30,6 +35,13 @@ export default async function handler(req, res) {
       requireSelf:   !!p.requireSelf,
       selfToken:     p.requireSelf ? p.selfToken : null,
       selfName:      p.selfName,
+      // V2 commenter stages
+      requireHrSpoc: !!p.requireHrSpoc,
+      requireHrHead: !!p.requireHrHead,
+      requireCoto:   !!p.requireCoto,
+      hrSpoc:        hrTok(p, 'HR_SPOC'),
+      hrHead:        hrTok(p, 'HR_HEAD'),
+      coto:          hrTok(p, 'COTO'),
       lastUpdatedBy: p.lastUpdatedBy,
       lastUpdatedOn: p.lastUpdatedOn,
     }));
