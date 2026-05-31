@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       getRole(roleKey),
       prisma.assessmentPair.findMany({
         where,
-        include: { employee: { select: { profileData: true } } },
+        include: { employee: { select: { profileData: true } }, hrReviews: true },
         orderBy: { empCode: 'asc' },
       }),
     ]);
@@ -96,8 +96,23 @@ export default async function handler(req, res) {
     }
     const profileCols = Array.from(profileColMap.values());
 
+    // Normalize an HR field-definition array to { key, label }.
+    const normHrFields = (arr) => (Array.isArray(arr) ? arr : [])
+      .map((f) => ({ key: f.key || f.question_key, label: f.label || f.question_label || f.key }))
+      .filter((f) => f.key);
+    const hrFieldDefs = {
+      hrSpoc: normHrFields(role.hrSpocFields),
+      hrHead: normHrFields(role.hrHeadFields),
+      coto:   normHrFields(role.cotoFields),
+    };
+
     const rows = pairs.map((p) => {
       const pd = p.employee?.profileData || {};
+      // Flatten hrReviews → { HR_SPOC: {fieldValues}, HR_HEAD: {...}, COTO: {...} }
+      const hrReviews = {};
+      for (const rev of (p.hrReviews || [])) {
+        hrReviews[rev.role] = rev.fields || {};
+      }
       return {
         pairId:    p.pairId,
         empCode:   p.empCode,
@@ -113,6 +128,9 @@ export default async function handler(req, res) {
         bhSubmittedOn:   p.bhSubmittedOn,
         selfSubmittedOn: p.selfSubmittedOn,
         requireSelf:     !!p.requireSelf,
+        requireHrSpoc:   !!p.requireHrSpoc,
+        requireHrHead:   !!p.requireHrHead,
+        requireCoto:     !!p.requireCoto,
         selfEmail:       p.selfEmail,
         selfName:        p.selfName,
         isArchived:   p.isArchived,
@@ -122,6 +140,7 @@ export default async function handler(req, res) {
         rmAnswers:   p.rmAnswers   || {},
         bhAnswers:   p.bhAnswers   || {},
         selfAnswers: p.selfAnswers || {},
+        hrReviews,
       };
     });
 
@@ -129,6 +148,7 @@ export default async function handler(req, res) {
       questions,
       profileCols,
       rows,
+      hrFieldDefs,
       role: { roleKey: role.roleKey, roleLabel: role.roleLabel }
     });
   } catch (err) {

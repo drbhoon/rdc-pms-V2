@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import AdminLayout from '../../components/AdminLayout';
+import { buildReportWorkbook, reportFilename } from '../../lib/reportXlsx';
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -26,127 +27,12 @@ function StatusBadge({ status }) {
 }
 
 // ── Excel export ──────────────────────────────────────────────────────────────
-// Layout: each employee gets up to THREE rows stacked vertically — Self (only
-// if requireSelf=true), then RM, then BH. Identity columns (Sr No, Emp Code,
-// Name, profile cols, RM Name, BH Name, Status) are repeated on every row so
-// HR can filter / sort without losing context. The Reviewer column ("SELF" /
-// "RM" / "BH") distinguishes them. Self answers are blank for questions
-// flagged excludeFromSelf=true.
-function downloadExcel(roleLabel, cycle, questions, profileCols, rows) {
-
-  const profileHeaders = profileCols.map((c) => c.label);
-  const headers = [
-    'Sr No',
-    'Emp Code',
-    'Employee Name',
-    'RM Name',
-    'BH Name',
-    ...profileHeaders,
-    'RM Email',
-    'BH Email',
-    'Status',
-    'Reviewer',                      // RM | BH — distinguishes the two rows
-    ...questions.map((q) => q.label),
-    'Submitted On',
-  ];
-
-  const dataRows = [];
-  rows.forEach((r, idx) => {
-    const sr      = idx + 1;
-    const profile = profileCols.map((c) => {
-      const v = r.profileData?.[c.key];
-      return v === undefined || v === null ? '' : v;
-    });
-    // Self answers — blank for excludeFromSelf questions.
-    const selfAns = questions.map((q) => {
-      if (q.excludeFromSelf) return '';
-      const v = r.selfAnswers?.[q.key];
-      return v === undefined || v === null ? '' : v;
-    });
-    const rmAns = questions.map((q) => {
-      const v = r.rmAnswers?.[q.key];
-      return v === undefined || v === null ? '' : v;
-    });
-    const bhAns = questions.map((q) => {
-      const v = r.bhAnswers?.[q.key];
-      return v === undefined || v === null ? '' : v;
-    });
-
-    // SELF row first (only if this pair was launched with requireSelf=true)
-    if (r.requireSelf) {
-      dataRows.push([
-        sr,
-        r.empCode,
-        r.empName,
-        r.rmName, r.bhName,
-        ...profile,
-        r.rmEmail, r.bhEmail,
-        r.status,
-        'SELF',
-        ...selfAns,
-        r.selfSubmittedOn ? new Date(r.selfSubmittedOn).toLocaleString('en-IN') : '',
-      ]);
-    }
-    // RM row
-    dataRows.push([
-      sr,
-      r.empCode,
-      r.empName,
-      r.rmName, r.bhName,
-      ...profile,
-      r.rmEmail, r.bhEmail,
-      r.status,
-      'RM',
-      ...rmAns,
-      r.rmSubmittedOn ? new Date(r.rmSubmittedOn).toLocaleString('en-IN') : '',
-    ]);
-    // BH row directly below
-    dataRows.push([
-      sr,
-      r.empCode,
-      r.empName,
-      r.rmName, r.bhName,
-      ...profile,
-      r.rmEmail, r.bhEmail,
-      r.status,
-      'BH',
-      ...bhAns,
-      r.bhSubmittedOn ? new Date(r.bhSubmittedOn).toLocaleString('en-IN') : '',
-    ]);
-  });
-
-  const wsData = [headers, ...dataRows];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Column widths — Sr No narrow, identity wider, questions roomy
-  ws['!cols'] = headers.map((h) => {
-    const lower = String(h).toLowerCase();
-    if (lower === 'sr no') return { wch: 6 };
-    if (lower === 'reviewer') return { wch: 10 };
-    if (lower === 'emp code') return { wch: 12 };
-    if (lower === 'status') return { wch: 14 };
-    if (lower === 'employee name' || lower === 'rm name' || lower === 'bh name') return { wch: 24 };
-    if (lower === 'rm email' || lower === 'bh email') return { wch: 28 };
-    if (lower === 'submitted on') return { wch: 20 };
-    return { wch: 30 };
-  });
-
-  // Freeze header row + first 5 columns (Sr No, Emp Code, Name, RM Name, BH Name)
-  ws['!freeze'] = { xSplit: 5, ySplit: 1 };
-
-  // Bold header row
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  for (let c = range.s.c; c <= range.e.c; c++) {
-    const cell = ws[XLSX.utils.encode_cell({ r: 0, c })];
-    if (cell) cell.s = { font: { bold: true } };
-  }
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Assessment Report');
-
-  const suffix = cycle || 'archived';
-  const filename = `${roleLabel.replace(/\s+/g, '_')}_${suffix}_report.xlsx`;
-  XLSX.writeFile(wb, filename);
+// Delegates to the shared builder (src/lib/reportXlsx.js) so the admin report
+// and the HR-SPOC one-pair download stay identical. HR commenter values appear
+// as extra columns at the end of each pair's BH row.
+function downloadExcel(roleLabel, cycle, questions, profileCols, rows, hrFieldDefs) {
+  const wb = buildReportWorkbook({ roleLabel, cycle, questions, profileCols, rows, hrFieldDefs });
+  XLSX.writeFile(wb, reportFilename(roleLabel, cycle));
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -208,7 +94,7 @@ export default function ReportsPage({ user }) {
     if (!data) return;
     setExporting(true);
     try {
-      downloadExcel(data.role.roleLabel, cycle || (tab === 'archived' ? 'Archived' : ''), data.questions, data.profileCols || [], data.rows);
+      downloadExcel(data.role.roleLabel, cycle || (tab === 'archived' ? 'Archived' : ''), data.questions, data.profileCols || [], data.rows, data.hrFieldDefs || {});
     } catch (err) {
       alert('Export failed: ' + err.message);
     } finally {
