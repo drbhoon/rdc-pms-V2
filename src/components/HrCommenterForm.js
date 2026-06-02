@@ -107,6 +107,37 @@ function CandidatePanel({ questions, readonly }) {
   );
 }
 
+// ── Employee profile card (basic info — same as RM/BH forms) ──────────────────
+function ProfileCard({ empCode, empName, profileData }) {
+  const [open, setOpen] = useState(true);
+  const entries = [
+    empCode ? ['EMP CODE', empCode] : null,
+    empName ? ['EMP NAME', empName] : null,
+    ...Object.entries(profileData || {}),
+  ].filter(Boolean);
+  if (entries.length === 0) return null;
+  return (
+    <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <button onClick={() => setOpen((p) => !p)} className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        <span>Employee Details</span>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+          {entries.map(([k, v]) => (
+            <div key={k}>
+              <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">{k}</div>
+              <div className="text-sm text-slate-700 mt-0.5">{String(v ?? '—')}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Prior HR comments (cumulative, read-only) ─────────────────────────────────
 function PriorHrPanel({ priorHr }) {
   if (!priorHr || priorHr.length === 0) return null;
@@ -138,7 +169,7 @@ function PriorHrPanel({ priorHr }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function HrCommenterForm({ role, token, data }) {
   const accent = ACCENTS[role] || ACCENTS.HR_SPOC;
-  const { pair, questions, readonly, priorHr, fields, existing, alreadySubmitted } = data;
+  const { pair, questions, readonly, priorHr, fields, existing, alreadySubmitted, employee } = data;
 
   const router = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const backUrl = router ? router.get('back') : '';
@@ -224,6 +255,7 @@ export default function HrCommenterForm({ role, token, data }) {
           </div>
         )}
 
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
         <CandidatePanel questions={questions} readonly={readonly} />
         <PriorHrPanel priorHr={priorHr} />
 
