@@ -2,9 +2,12 @@
  * /api/form/bh/[token]
  *
  * GET  — returns pair data (including rmAnswers), questions, and employee profile for the BH form
- * POST — submits BH answers and finalises the assessment
+ * POST — submits BH answers; if the template has post-BH commenter stages, the
+ *        pair advances to BH_SUBMITTED and the HR-SPOC invite is fired; otherwise
+ *        it finalises.
  */
 import { getPairByBhToken, getRole, submitBhAnswers, appendAudit } from '../../../../lib/queries';
+import { runInvitesWithTimeout } from '../../../../lib/invites';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -93,7 +96,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Not ready for BH review' });
       }
 
-      await submitBhAnswers(pair.pairId, answers, 'bh:' + pair.bhEmail);
+      // submitBhAnswers advances to BH_SUBMITTED (if any commenter stage is
+      // active) or FINALIZED (if none). Capture the result to know which.
+      const updated = await submitBhAnswers(pair.pairId, answers, 'bh:' + pair.bhEmail);
+      const finalized = updated?.status === 'FINALIZED';
 
       await appendAudit({
         action:      'BH_SUBMITTED',
@@ -103,10 +109,22 @@ export default async function handler(req, res) {
         roleKey:     pair.roleKey,
         cycle:       pair.cycle,
         performedBy: 'bh:' + pair.bhEmail,
-        details:     {},
+        details:     { nextStatus: updated?.status, finalized },
       });
 
-      return res.status(200).json({ ok: true });
+      // If a commenter stage follows (not finalised), fire the next reviewer's
+      // invite now (12s cap) so HR-SPOC is emailed immediately rather than
+      // waiting for the next cron tick. No-op when finalised.
+      let inviteResult = null;
+      if (!finalized) {
+        try {
+          inviteResult = await runInvitesWithTimeout(12000);
+        } catch (e) {
+          console.error('[form/bh] runInvites failed:', e.message);
+        }
+      }
+
+      return res.status(200).json({ ok: true, finalized, inviteResult });
     } catch (err) {
       console.error('[form/bh POST]', err);
       return res.status(500).json({ error: 'Internal server error' });
