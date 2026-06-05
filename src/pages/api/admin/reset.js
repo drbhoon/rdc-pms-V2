@@ -11,7 +11,7 @@
  *   - HrUser table is preserved so the super admin can still log in afterward.
  *
  * Wipes (in dependency order):
- *   AuditLog → AssessmentPair → ReviewerLink → Employee → RoleTemplate
+ *   AuditLog → HrReview → AssessmentPair → ReviewerLink → Employee → RoleTemplate
  */
 import { requireSuperAdmin } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
@@ -35,6 +35,7 @@ export default async function handler(req, res) {
     // Snapshot counts BEFORE wipe so the response can show what was cleared.
     [
       before.auditLog,
+      before.hrReview,
       before.assessmentPair,
       before.reviewerLink,
       before.employee,
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
       before.hrUser,
     ] = await Promise.all([
       prisma.auditLog.count(),
+      prisma.hrReview.count(),
       prisma.assessmentPair.count(),
       prisma.reviewerLink.count(),
       prisma.employee.count(),
@@ -49,9 +51,11 @@ export default async function handler(req, res) {
       prisma.hrUser.count(),
     ]);
 
-    // FK-safe order: children → parents.
+    // FK-safe order: children → parents. HrReview FK-references AssessmentPair,
+    // so it must be deleted before the pairs (alongside AuditLog).
     await prisma.$transaction([
       prisma.auditLog.deleteMany({}),
+      prisma.hrReview.deleteMany({}),
       prisma.assessmentPair.deleteMany({}),
       prisma.reviewerLink.deleteMany({}),
       prisma.employee.deleteMany({}),
@@ -60,6 +64,7 @@ export default async function handler(req, res) {
 
     [
       after.auditLog,
+      after.hrReview,
       after.assessmentPair,
       after.reviewerLink,
       after.employee,
@@ -67,6 +72,7 @@ export default async function handler(req, res) {
       after.hrUser,
     ] = await Promise.all([
       prisma.auditLog.count(),
+      prisma.hrReview.count(),
       prisma.assessmentPair.count(),
       prisma.reviewerLink.count(),
       prisma.employee.count(),
