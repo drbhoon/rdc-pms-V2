@@ -20,6 +20,9 @@ RUN npm install --legacy-peer-deps
 # ── Build stage ────────────────────────────────────────────────────────────
 FROM deps AS build
 COPY . .
+# Next bakes basePath into the bundle at build time.
+ARG BASE_PATH=""
+ENV BASE_PATH=${BASE_PATH}
 # `next build` also runs `prisma generate` (see package.json build script)
 RUN npm run build
 
@@ -33,10 +36,16 @@ RUN apt-get update \
 WORKDIR /app
 ENV NODE_ENV=production
 
+# next.config.js is re-evaluated at server start, so the prefix must also be
+# present at runtime — otherwise the server routes at "/" while the prebuilt
+# HTML points at "/parakh/_next/".
+ARG BASE_PATH=""
+ENV BASE_PATH=${BASE_PATH}
+
 # Copy the built app + everything Next.js needs at runtime.
-# Note: no `public/` directory in this repo, so we don't copy one.
 COPY --from=build /app/node_modules   ./node_modules
 COPY --from=build /app/.next          ./.next
+COPY --from=build /app/public         ./public
 COPY --from=build /app/package.json   ./package.json
 COPY --from=build /app/prisma         ./prisma
 COPY --from=build /app/next.config.js ./next.config.js
