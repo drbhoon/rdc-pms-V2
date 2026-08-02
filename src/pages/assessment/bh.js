@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import AssessmentForm from '../../components/AssessmentForm';
+import { withBase } from "../../lib/basePath";
 
 export default function BhAssessment() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function BhAssessment() {
     <Layout title="BH Assessment Form">
       {/* Breadcrumb */}
       <div className="text-xs text-gray-500 mb-4">
-        <a href="/admin/employees" className="hover:underline">Employee Selection</a>
+        <a href={withBase("/admin/employees")} className="hover:underline">Employee Selection</a>
         {' → '}BH Assessment
         {pairId && <span className="ml-1 font-mono">({pairId})</span>}
         {isViewOnly && <span className="ml-2 text-gray-400">[View Only]</span>}
@@ -75,9 +76,9 @@ export default function BhAssessment() {
         <div className="bg-green-50 border border-green-200 rounded px-4 py-3 text-green-700 text-sm mb-4">
           <strong>BH Assessment finalized.</strong> Both RM and BH rows are now locked (green).
           <br />
-          <a href="/admin/employees" className="underline mt-1 inline-block">← Back to Employee Selection</a>
+          <a href={withBase("/admin/employees")} className="underline mt-1 inline-block">← Back to Employee Selection</a>
           {' | '}
-          <a href="/dashboard" className="underline">View Dashboard</a>
+          <a href={withBase("/dashboard")} className="underline">View Dashboard</a>
         </div>
       )}
 

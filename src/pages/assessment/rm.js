@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import AssessmentForm from '../../components/AssessmentForm';
+import { withBase } from "../../lib/basePath";
 
 export default function RmAssessment() {
   const router = useRouter();
@@ -63,7 +64,7 @@ export default function RmAssessment() {
     <Layout title="RM Assessment Form">
       {/* Breadcrumb */}
       <div className="text-xs text-gray-500 mb-4">
-        <a href="/admin/employees" className="hover:underline">Employee Selection</a>
+        <a href={withBase("/admin/employees")} className="hover:underline">Employee Selection</a>
         {' → '}RM Assessment
         {pairId && <span className="ml-1 font-mono">({pairId})</span>}
       </div>
@@ -76,9 +77,9 @@ export default function RmAssessment() {
           <strong>RM Assessment submitted successfully.</strong> BH row has been created.
           The RM row is now locked (blue).
           <br />
-          <a href="/admin/employees" className="underline mt-1 inline-block">← Back to Employee Selection</a>
+          <a href={withBase("/admin/employees")} className="underline mt-1 inline-block">← Back to Employee Selection</a>
           {' | '}
-          <a href="/dashboard" className="underline">View Dashboard</a>
+          <a href={withBase("/dashboard")} className="underline">View Dashboard</a>
         </div>
       )}
 
