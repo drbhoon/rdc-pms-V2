@@ -92,6 +92,24 @@ export function getSessionUser(req) {
   return decodeSession(raw);
 }
 
+/**
+ * Page guard for getServerSideProps.
+ *
+ * Every admin page used to inline its own copy of "read pms_session, decode
+ * base64, redirect if absent". That second implementation ignored
+ * getSessionUser entirely, so switching to SSO fixed the API routes while the
+ * pages still demanded a cookie — and redirected to a login page that the
+ * middleware immediately sent back, an infinite redirect for anyone who had
+ * never signed in with a password.
+ *
+ * One implementation now, so an auth change cannot land in half the app.
+ */
+export function getPageAuth(req) {
+  const user = getSessionUser(req);
+  if (!user) return { redirect: { destination: '/admin/login', permanent: false } };
+  return { props: { user } };
+}
+
 export { REQUIRE_SSO };
 
 /** Require HR auth — returns user or sends 401 */

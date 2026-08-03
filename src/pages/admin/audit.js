@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../components/AdminLayout';
+import { getPageAuth } from '../../lib/auth';
 
 const ACTION_COLORS = {
   ROW_SELECTED:    'bg-purple-100  text-purple-700  border-purple-200',
@@ -308,12 +309,5 @@ export default function AuditPage({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
-  const raw = req.cookies?.pms_session;
-  if (!raw) return { redirect: { destination: '/admin/login', permanent: false } };
-  try {
-    const user = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
-    return { props: { user } };
-  } catch {
-    return { redirect: { destination: '/admin/login', permanent: false } };
-  }
+  return getPageAuth(req);
 }

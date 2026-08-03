@@ -12,6 +12,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import AdminLayout from '../../components/AdminLayout';
 import HrStagesEditor, { ActivationSummary } from '../../components/HrStagesEditor';
+import { getPageAuth } from '../../lib/auth';
 
 // Seed HR-stage field definitions from auto-detected HR_*/COTO_* columns.
 // `cols` = [{ header, type }] where type is hr_spoc | hr_head | coto.
@@ -1012,12 +1013,5 @@ export default function SetupPage({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
-  const raw = req.cookies?.pms_session;
-  if (!raw) return { redirect: { destination: '/admin/login', permanent: false } };
-  try {
-    const user = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
-    return { props: { user } };
-  } catch {
-    return { redirect: { destination: '/admin/login', permanent: false } };
-  }
+  return getPageAuth(req);
 }
