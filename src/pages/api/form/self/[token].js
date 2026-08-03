@@ -14,6 +14,7 @@ import {
   getOrCreateReviewerLink,
 } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
+import { audienceForKey, isReservedColumnKey } from '../../../../lib/ojt';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -32,17 +33,23 @@ export default async function handler(req, res) {
       }
 
       const role = await getRole(pair.roleKey);
+      const isOjt = role?.templateType === 'OJT';
 
-      // Normalise to camelCase + filter out questions flagged excludeFromSelf=true
+      // Normalise to camelCase + filter out questions flagged excludeFromSelf=true.
+      // For OJT, the employee only answers the EMPLOYEE-audience questions
+      // (RM_/BH_ prefixed questions belong to the RM/BH stages).
       const questions = (Array.isArray(role?.questions) ? role.questions : [])
         .map((q) => ({
           key:             q.question_key  || q.key,
           label:           q.question_label || q.label,
           fieldType:       q.field_type    || q.fieldType || 'rating',
           order:           q.display_order || q.order || 0,
+          options:         Array.isArray(q.options) ? q.options : null,
+          allowOther:      !!q.allowOther,
           excludeFromSelf: !!q.excludeFromSelf,
+          audience:        q.audience || audienceForKey(q.question_key || q.key),
         }))
-        .filter((q) => !q.excludeFromSelf)
+        .filter((q) => !q.excludeFromSelf && (!isOjt || q.audience === 'EMPLOYEE'))
         .sort((a, b) => a.order - b.order);
 
       // Return safe pair fields — no rmToken / bhToken
@@ -50,10 +57,13 @@ export default async function handler(req, res) {
         pairId:      pair.pairId,
         empCode:     pair.empCode,
         empName:     pair.empName,
-        roleKey:     pair.roleKey,
-        cycle:       pair.cycle,
-        status:      pair.status,
-        selfAnswers: pair.selfAnswers || {},
+        roleKey:      pair.roleKey,
+        cycle:        pair.cycle,
+        status:       pair.status,
+        templateType: pair.templateType || 'STANDARD',
+        rmName:       pair.rmName || '',
+        bhName:       pair.bhName || '',
+        selfAnswers:  pair.selfAnswers || {},
       };
 
       // Fetch employee profile (same scrub as the RM form)
@@ -85,8 +95,7 @@ export default async function handler(req, res) {
           return (
             !fullQuestionKeySet.has(kLower) &&
             !routingCols.has(k) &&
-            !/^__EMPTY/.test(k) &&
-            !/^\s*\d+[\.\)]\s/.test(k)
+            !isReservedColumnKey(k)
           );
         })
       );
@@ -130,22 +139,25 @@ export default async function handler(req, res) {
         details:     {},
       });
 
-      // Ensure the RM ReviewerLink exists, then await runInvites with a 12s
-      // hard cap so the RM email actually fires before the employee sees the
-      // thank-you screen. Anything that times out is picked up by next cron.
-      try {
-        await getOrCreateReviewerLink(pair.rmEmail, 'RM', pair.roleKey, pair.cycle);
-      } catch (e) {
-        console.error('[form/self] failed to ensure RM ReviewerLink:', e.message);
-      }
+      // FEEDBACK templates finalise here — there's no RM/BH stage to invite.
+      // For all other templates, ensure the RM ReviewerLink exists then await
+      // runInvites with a 12s hard cap so the RM email fires before the employee
+      // sees the thank-you screen. Anything that times out is caught by cron.
       let inviteResult = null;
-      try {
-        inviteResult = await runInvitesWithTimeout(12000);
-      } catch (e) {
-        console.error('[form/self] runInvites failed:', e.message);
+      if (pair.templateType !== 'FEEDBACK') {
+        try {
+          await getOrCreateReviewerLink(pair.rmEmail, 'RM', pair.roleKey, pair.cycle);
+        } catch (e) {
+          console.error('[form/self] failed to ensure RM ReviewerLink:', e.message);
+        }
+        try {
+          inviteResult = await runInvitesWithTimeout(12000);
+        } catch (e) {
+          console.error('[form/self] runInvites failed:', e.message);
+        }
       }
 
-      return res.status(200).json({ ok: true, inviteResult });
+      return res.status(200).json({ ok: true, finalized: pair.templateType === 'FEEDBACK', inviteResult });
     } catch (err) {
       console.error('[form/self POST]', err);
       return res.status(500).json({ error: 'Internal server error' });

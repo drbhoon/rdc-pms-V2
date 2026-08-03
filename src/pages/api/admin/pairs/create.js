@@ -32,14 +32,58 @@ export default async function handler(req, res) {
     startOn,
   } = req.body || {};
 
-  if (!empCode || !empName || !roleKey || !cycle || !rmName || !rmEmail || !bhName || !bhEmail) {
-    return res.status(400).json({ error: 'empCode, empName, roleKey, cycle, rmName, rmEmail, bhName, bhEmail are all required' });
+  if (!empCode || !empName || !roleKey || !cycle) {
+    return res.status(400).json({ error: 'empCode, empName, roleKey, cycle are all required' });
   }
 
   try {
-    // ── Check template — does it require self-assessment? ─────────────────
     const role = await getRole(roleKey);
     if (!role) return res.status(400).json({ error: `No template found for role "${roleKey}".` });
+
+    // ── FEEDBACK templates: employee-only. No RM/BH/HR stages. The Self
+    //    submission finalises the pair; HR downloads an employee-wise report.
+    if (role.templateType === 'FEEDBACK') {
+      const employee = await prisma.employee.findUnique({
+        where: { empCode_roleKey: { empCode, roleKey } },
+        select: { email: true, empName: true },
+      });
+      const email = employee?.email ? String(employee.email).trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({
+          error: `Feedback template "${roleKey}" needs an EMP_EMAIL for ${empCode} (${empName}). Re-upload the Employees Excel with an EMP_EMAIL column, then launch again.`,
+        });
+      }
+      const pair = await createPair({
+        empCode, empName, roleKey, cycle,
+        rmName: '', rmEmail: '', bhName: '', bhEmail: '',
+        selectedBy: user.email,
+        startOn: startOn || null,
+        requireSelf: true,
+        requireRm: false,
+        selfEmail: email,
+        selfName: employee?.empName || empName,
+        templateType: 'FEEDBACK',
+      });
+      await getOrCreateReviewerLink(email, 'SELF', roleKey, cycle);
+      await appendAudit({
+        action:      'PAIR_CREATED',
+        pairId:      pair.pairId,
+        empCode:     pair.empCode,
+        empName:     pair.empName,
+        roleKey:     pair.roleKey,
+        cycle:       pair.cycle,
+        performedBy: user.email,
+        details:     { templateType: 'FEEDBACK', requireSelf: true, selfEmail: email, startOn: startOn || null },
+      });
+      return res.status(201).json({ pair });
+    }
+
+    // ── STANDARD / OJT: BH mandatory, RM optional. When RM is absent the pair
+    //    skips the RM stage and routes straight to BH (requireRm=false). ─────
+    if (!bhName || !bhEmail) {
+      return res.status(400).json({ error: 'bhName and bhEmail are required for this template' });
+    }
+    const requireRm = !!(String(rmName || '').trim() && String(rmEmail || '').trim());
 
     let requireSelf = false;
     let selfEmail = null;
@@ -92,13 +136,15 @@ export default async function handler(req, res) {
       empName,
       roleKey,
       cycle,
-      rmName,
-      rmEmail,
+      rmName:  requireRm ? rmName  : '',
+      rmEmail: requireRm ? rmEmail : '',
       bhName,
       bhEmail,
       selectedBy: user.email,
       startOn: startOn || null,
       requireSelf,
+      requireRm,
+      templateType: role.templateType || 'STANDARD',
       selfEmail,
       selfName,
       hrSpoc: stages.hrSpoc,
@@ -111,7 +157,13 @@ export default async function handler(req, res) {
     // either now or after self submission). SELF link is created only when
     // requireSelf=true. HR commenter dashboard links are created lazily by
     // runInvites when their stage becomes due.
-    await getOrCreateReviewerLink(rmEmail, 'RM', roleKey, cycle);
+    if (requireRm) {
+      await getOrCreateReviewerLink(rmEmail, 'RM', roleKey, cycle);
+    } else {
+      // No RM — the pair starts at RM_SUBMITTED, so ensure the BH link exists
+      // now (the RM-submit path that normally creates it is skipped).
+      await getOrCreateReviewerLink(bhEmail, 'BH', roleKey, cycle);
+    }
     if (requireSelf) {
       await getOrCreateReviewerLink(selfEmail, 'SELF', roleKey, cycle);
     }
@@ -125,9 +177,11 @@ export default async function handler(req, res) {
       cycle:       pair.cycle,
       performedBy: user.email,
       details:     {
-        rmName, rmEmail, bhName, bhEmail,
+        rmName: requireRm ? rmName : '', rmEmail: requireRm ? rmEmail : '',
+        bhName, bhEmail,
         startOn: startOn || null,
         requireSelf,
+        requireRm,
         ...(requireSelf ? { selfEmail } : {}),
         requireHrSpoc: stages.hrSpoc.active,
         requireHrHead: stages.hrHead.active,

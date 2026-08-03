@@ -15,12 +15,14 @@ export default async function handler(req, res) {
     const roles = await getAllRoles();
     return res.status(200).json({
       roles: roles.map((r) => ({
-        roleKey:    r.roleKey,
-        roleLabel:  r.roleLabel,
-        rmNameCol:  r.rmNameCol  || null,
-        rmEmailCol: r.rmEmailCol || null,
-        bhNameCol:  r.bhNameCol  || null,
-        bhEmailCol: r.bhEmailCol || null,
+        roleKey:      r.roleKey,
+        roleLabel:    r.roleLabel,
+        templateType: r.templateType || 'STANDARD',
+        includeSelf:  !!r.includeSelf,
+        rmNameCol:    r.rmNameCol  || null,
+        rmEmailCol:   r.rmEmailCol || null,
+        bhNameCol:    r.bhNameCol  || null,
+        bhEmailCol:   r.bhEmailCol || null,
       })),
     });
   } catch (err) {

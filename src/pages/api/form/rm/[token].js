@@ -12,6 +12,7 @@ import {
   getOrCreateReviewerLink,
 } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
+import { questionAudience, isReservedColumnKey } from '../../../../lib/ojt';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -23,13 +24,31 @@ export default async function handler(req, res) {
       if (!pair) return res.status(404).json({ error: 'Token not found' });
 
       const role = await getRole(pair.roleKey);
-      // Normalise to camelCase for the form page
-      const questions = (Array.isArray(role?.questions) ? role.questions : []).map((q) => ({
+      const isOjt = role?.templateType === 'OJT';
+
+      // Normalise ALL questions (with audience) to camelCase.
+      const allQuestions = (Array.isArray(role?.questions) ? role.questions : []).map((q) => ({
         key:       q.question_key  || q.key,
         label:     q.question_label || q.label,
         fieldType: q.field_type    || q.fieldType || 'rating',
         order:     q.display_order || q.order || 0,
+        options:    Array.isArray(q.options) ? q.options : undefined,
+        allowOther: !!q.allowOther,
+        audience:   q.audience || questionAudience(q),
       })).sort((a, b) => a.order - b.order);
+
+      // The RM edits only RM-audience questions in OJT; all questions otherwise.
+      const questions = (isOjt ? allQuestions.filter((q) => q.audience === 'RM') : allQuestions)
+        .map(({ key, label, fieldType, order, options, allowOther }) => ({ key, label, fieldType, order, options: options || null, allowOther }));
+
+      // OJT: the employee's answers are shown read-only above the RM's questions.
+      const selfAnswers = pair.selfAnswers || {};
+      const priorStages = isOjt ? [{
+        label: 'Employee Responses',
+        accent: 'EMPLOYEE',
+        items: allQuestions.filter((q) => q.audience === 'EMPLOYEE')
+          .map((q) => ({ label: q.label, value: selfAnswers[q.key] })),
+      }] : [];
 
       // Return safe pair fields — no bhToken
       const safePair = {
@@ -59,25 +78,25 @@ export default async function handler(req, res) {
         } catch { /* non-critical */ }
       }
 
-      // Strip question columns + routing cols + XLSX empty placeholders from profile card
-      const questionKeySet = new Set(questions.map((q) => q.key.toLowerCase().trim()));
+      // Strip ALL question columns (every audience) + routing + XLSX placeholders from profile card
+      const questionKeySet = new Set(allQuestions.map((q) => q.key.toLowerCase().trim()));
       const routingCols = new Set(
         [role?.rmNameCol, role?.rmEmailCol, role?.bhNameCol, role?.bhEmailCol].filter(Boolean)
       );
       const profileData = Object.fromEntries(
         Object.entries(rawProfileData).filter(([k]) => {
           const kLower = k.toLowerCase().trim();
-          // Strip: questions, routing cols, XLSX empty, and any numbered columns (1. ... 17. ...)
+          // Strip: questions (all audiences), routing cols, and any reserved
+          // question-like columns (numbered, RM_/BH_, HR_SPOC_/HR_HEAD_/COTO_).
           return (
             !questionKeySet.has(kLower) &&
             !routingCols.has(k) &&
-            !/^__EMPTY/.test(k) &&
-            !/^\s*\d+[\.\)]\s/.test(k)  // numbered questions pattern
+            !isReservedColumnKey(k)
           );
         })
       );
 
-      return res.status(200).json({ pair: safePair, questions, employee: { profileData } });
+      return res.status(200).json({ pair: safePair, questions, employee: { profileData }, isOjt, priorStages });
     } catch (err) {
       console.error('[form/rm GET]', err);
       return res.status(500).json({ error: 'Internal server error' });

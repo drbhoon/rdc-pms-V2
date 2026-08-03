@@ -11,6 +11,7 @@
 import * as XLSX from 'xlsx';
 import { getHrReviewByToken } from '../../../../../lib/queries';
 import { buildReportWorkbook, reportFilename } from '../../../../../lib/reportXlsx';
+import { audienceForKey, isReservedColumnKey } from '../../../../../lib/ojt';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
         label:           q.question_label || q.label,
         excludeFromSelf: !!q.excludeFromSelf,
         order:           q.display_order || q.order || 0,
+        audience:        q.audience || audienceForKey(q.question_key || q.key),
       }))
       .filter((q) => q.key)
       .sort((a, b) => a.order - b.order);
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
     const profileCols = Object.keys(pd)
       .filter((k) => {
         const n = normKey(k);
-        return n && !IDENT.has(n) && !qNorm.has(n) && !routeNorm.has(n) && !/^__EMPTY/.test(k) && !/^\s*\d+[\.\)]\s/.test(k);
+        return n && !IDENT.has(n) && !qNorm.has(n) && !routeNorm.has(n) && !isReservedColumnKey(k);
       })
       .map((k) => ({ key: k, label: k }));
 
@@ -77,6 +79,7 @@ export default async function handler(req, res) {
       roleLabel: template?.roleLabel || pair.roleKey,
       cycle: pair.cycle,
       questions, profileCols, rows: [row], hrFieldDefs,
+      templateType: template?.templateType || 'STANDARD',
     });
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 

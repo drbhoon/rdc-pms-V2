@@ -81,7 +81,7 @@ export async function getRole(roleKey) {
 
 export async function upsertRole(roleKey, roleLabel, questions, opts = {}) {
   const {
-    filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf,
+    filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf, templateType,
     // V2 commenter routing + field definitions
     hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
     hrSpocFields, hrHeadFields, cotoFields,
@@ -95,6 +95,7 @@ export async function upsertRole(roleKey, roleLabel, questions, opts = {}) {
     ...(bhNameCol   !== undefined && { bhNameCol }),
     ...(bhEmailCol  !== undefined && { bhEmailCol }),
     ...(includeSelf !== undefined && { includeSelf: !!includeSelf }),
+    ...(templateType !== undefined && { templateType: templateType || 'STANDARD' }),
     // V2: persist commenter routing (null-able strings) + field def arrays
     ...(hrSpocName   !== undefined && { hrSpocName }),
     ...(hrSpocEmail  !== undefined && { hrSpocEmail }),
@@ -267,6 +268,12 @@ export async function createPair({
   rmName, rmEmail, bhName, bhEmail,
   selectedBy, startOn,
   requireSelf = false, selfEmail = null, selfName = null,
+  // V2: when the employee has no RM, requireRm=false skips the RM stage and the
+  // pair starts directly at RM_SUBMITTED (awaiting BH) with blank RM answers.
+  requireRm = true,
+  // Template flavour snapshot (STANDARD | FEEDBACK | OJT). FEEDBACK pairs are
+  // employee-only and finalise right after the Self submission.
+  templateType = 'STANDARD',
   // V2: post-BH commenter stages, snapshotted from the template by the caller.
   // Pass `{ active, name, email }` for each. Inactive stages are simply omitted.
   hrSpoc = null, hrHead = null, coto = null,
@@ -276,9 +283,21 @@ export async function createPair({
   const seq = String(existing + 1).padStart(4, '0');
   const pairId = generatePairId(empCode, roleKey, cycle, seq);
 
-  // If self is required, the pair starts at PENDING_SELF and the RM is invited
-  // only after self submission. Otherwise it starts at PENDING_RM exactly as before.
-  const initialStatus = requireSelf ? 'PENDING_SELF' : 'PENDING_RM';
+  // Normalise reviewer emails on write. ReviewerLink emails are always stored
+  // trim+lowercased; keeping the pair's copy in the same shape is what lets the
+  // reviewer dashboard match a pair to its link.
+  const normEmail = (e) => String(e || '').trim().toLowerCase();
+  rmEmail = normEmail(rmEmail);
+  bhEmail = normEmail(bhEmail);
+  selfEmail = selfEmail ? normEmail(selfEmail) : selfEmail;
+
+  // If self is required, the pair starts at PENDING_SELF and the next stage is
+  // invited only after self submission. With no self, a pair with an RM starts
+  // at PENDING_RM; a pair WITHOUT an RM (requireRm=false) skips straight to
+  // RM_SUBMITTED so the existing BH-invite path picks it up with blank ratings.
+  const initialStatus = requireSelf ? 'PENDING_SELF'
+                      : !requireRm   ? 'RM_SUBMITTED'
+                      :                'PENDING_RM';
 
   const requireHrSpoc = !!(hrSpoc && hrSpoc.active);
   const requireHrHead = !!(hrHead && hrHead.active);
@@ -297,6 +316,8 @@ export async function createPair({
       rmName, rmEmail, bhName, bhEmail,
       status: initialStatus,
       requireSelf,
+      requireRm,
+      templateType,
       selfEmail: requireSelf ? selfEmail : null,
       selfName:  requireSelf ? selfName  : null,
       requireHrSpoc, requireHrHead, requireCoto,
@@ -332,26 +353,32 @@ export async function getReviewerLinkByToken(token) {
 // `role` is one of 'SELF' | 'RM' | 'BH' — selects which email column to match.
 export async function getPairsForReviewer({ email, role, roleKey, cycle, status }) {
   const normEmail = String(email || '').trim().toLowerCase();
-  let emailFilter;
-  if (role === 'SELF') {
-    emailFilter = { selfEmail: { equals: normEmail, mode: 'insensitive' }, requireSelf: true };
-  } else if (role === 'BH') {
-    emailFilter = { bhEmail: { equals: normEmail, mode: 'insensitive' } };
-  } else {
-    emailFilter = { rmEmail: { equals: normEmail, mode: 'insensitive' } };
-  }
-  const where = {
-    roleKey,
-    cycle,
-    isArchived: false,
-    ...emailFilter,
-    ...(status ? { status } : {}),
-  };
-  return prisma.assessmentPair.findMany({
-    where,
+
+  // Match the reviewer email in JS rather than SQL. ReviewerLink emails are
+  // always normalised (trim+lowercase), but pair emails came straight from the
+  // uploaded Excel and may carry stray whitespace/case. A SQL `equals` (even
+  // with mode:'insensitive') misses those, which made a genuinely-pending
+  // assessment show as "All caught up" on the reviewer's dashboard. Filtering
+  // here fixes already-launched pairs without a data migration; the row count
+  // per (roleKey, cycle) is small.
+  const pairs = await prisma.assessmentPair.findMany({
+    where: {
+      roleKey,
+      cycle,
+      isArchived: false,
+      ...(role === 'SELF' ? { requireSelf: true } : {}),
+      ...(status ? { status } : {}),
+    },
     include: { employee: { select: { profileData: true } } },
     orderBy: { empName: 'asc' },
   });
+
+  const emailOf = (p) =>
+    role === 'SELF' ? p.selfEmail
+    : role === 'BH' ? p.bhEmail
+    : p.rmEmail;
+
+  return pairs.filter((p) => String(emailOf(p) || '').trim().toLowerCase() === normEmail);
 }
 
 // Mark invitation emails as sent for a list of pairs (role = 'SELF' | 'RM' | 'BH')
@@ -373,6 +400,7 @@ export async function getPendingSelfInvites() {
       requireSelf: true,
       selfInvitedOn: null,
       selfEmail: { not: null },
+      role: { isActive: true }, // never invite for a soft-deleted template
       OR: [{ startOn: null }, { startOn: { lte: new Date() } }],
     },
     include: { employee: { select: { profileData: true } } },
@@ -389,6 +417,7 @@ export async function getPendingRemindersForSelf() {
       requireSelf: true,
       selfInvitedOn: { not: null },
       selfEmail: { not: null },
+      role: { isActive: true },
     },
     include: { employee: { select: { profileData: true } } },
     orderBy: [{ roleKey: 'asc' }, { cycle: 'asc' }, { selfEmail: 'asc' }],
@@ -402,6 +431,7 @@ export async function getPendingRmInvites() {
       status: 'PENDING_RM',
       isArchived: false,
       rmInvitedOn: null,
+      role: { isActive: true },
       OR: [{ startOn: null }, { startOn: { lte: new Date() } }],
     },
     include: { employee: { select: { profileData: true } } },
@@ -409,13 +439,18 @@ export async function getPendingRmInvites() {
   });
 }
 
-// Pairs that need a BH invite (RM submitted, BH not yet invited)
+// Pairs that need a BH invite (RM submitted, BH not yet invited).
+// The startOn gate is harmless for normal pairs (startOn is already past by the
+// time the RM submits) but prevents an RM-less, future-dated pair — which is
+// created directly at RM_SUBMITTED — from emailing BH before the cycle starts.
 export async function getPendingBhInvites() {
   return prisma.assessmentPair.findMany({
     where: {
       status: 'RM_SUBMITTED',
       isArchived: false,
       bhInvitedOn: null,
+      role: { isActive: true },
+      OR: [{ startOn: null }, { startOn: { lte: new Date() } }],
     },
     include: { employee: { select: { profileData: true } } },
     orderBy: [{ roleKey: 'asc' }, { cycle: 'asc' }, { bhEmail: 'asc' }],
@@ -429,6 +464,7 @@ export async function getPendingRemindersForRm() {
       status: 'PENDING_RM',
       isArchived: false,
       rmInvitedOn: { not: null },
+      role: { isActive: true },
     },
     include: { employee: { select: { profileData: true } } },
     orderBy: [{ roleKey: 'asc' }, { cycle: 'asc' }, { rmEmail: 'asc' }],
@@ -441,6 +477,7 @@ export async function getPendingRemindersForBh() {
       status: 'RM_SUBMITTED',
       isArchived: false,
       bhInvitedOn: { not: null },
+      role: { isActive: true },
     },
     include: { employee: { select: { profileData: true } } },
     orderBy: [{ roleKey: 'asc' }, { cycle: 'asc' }, { bhEmail: 'asc' }],
@@ -459,7 +496,7 @@ export async function getPendingHrInvitesByRole(role, { alreadyInvited = false }
       submittedOn: null,
       email: { not: null },
       ...(alreadyInvited ? { invitedOn: { not: null } } : { invitedOn: null }),
-      pair: { isArchived: false },
+      pair: { isArchived: false, role: { isActive: true } },
     },
     include: {
       pair: {
@@ -507,14 +544,27 @@ export async function getHrReviewsForDashboard({ email, role, roleKey, cycle }) 
   return reviews;
 }
 
-// Self-assessment submit: status flips PENDING_SELF → PENDING_RM so the
-// existing RM invite/cron path picks it up. Self does NOT lock the pair.
+// Self-assessment submit: status flips PENDING_SELF → next stage so the
+// existing invite/cron path picks it up. Self does NOT lock the pair.
+// With an RM the next stage is PENDING_RM; without one (requireRm=false) it
+// skips straight to RM_SUBMITTED so the assessment routes to BH.
 export async function submitSelfAnswers(pairId, answers, performedBy) {
+  const pair = await prisma.assessmentPair.findUnique({
+    where: { pairId },
+    select: { requireRm: true, templateType: true },
+  });
+  // FEEDBACK templates are employee-only: the Self submission finalises the pair.
+  // Otherwise the next stage is RM (or BH when there's no RM).
+  const isFeedback = pair?.templateType === 'FEEDBACK';
+  const nextStatus = isFeedback
+    ? 'FINALIZED'
+    : (pair?.requireRm === false ? 'RM_SUBMITTED' : 'PENDING_RM');
   return prisma.assessmentPair.update({
     where: { pairId },
     data: {
       selfAnswers:     answers,
-      status:          'PENDING_RM',
+      status:          nextStatus,
+      ...(isFeedback ? { lockStatus: 'LOCKED' } : {}),
       selfSubmittedOn: new Date(),
       lastUpdatedBy:   performedBy,
       lastUpdatedOn:   new Date(),

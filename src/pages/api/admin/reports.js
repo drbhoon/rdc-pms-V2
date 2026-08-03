@@ -6,6 +6,7 @@
 import { requireAuth } from '../../../lib/auth';
 import { getRole } from '../../../lib/queries';
 import { prisma } from '../../../lib/db';
+import { audienceForKey, isReservedColumnKey } from '../../../lib/ojt';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
       fieldType:       q.field_type    || q.fieldType || 'rating',
       order:           q.display_order || q.order || 0,
       excludeFromSelf: !!q.excludeFromSelf,
+      audience:        q.audience || audienceForKey(q.question_key || q.key),
     })).sort((a, b) => a.order - b.order);
 
     // Profile columns — union of (template-declared profileCols) + (any extra keys
@@ -68,9 +70,7 @@ export default async function handler(req, res) {
       if (IDENTITY_KEYS_NORM.has(n)) return true;
       if (routingColsNorm.has(n)) return true;
       if (questionKeysNorm.has(n)) return true;
-      const k = String(rawKey);
-      if (/^__EMPTY/.test(k)) return true;
-      if (/^\s*\d+[\.\)]\s/.test(k)) return true; // numbered question like "1. ..."
+      if (isReservedColumnKey(rawKey)) return true; // numbered / RM_/BH_ / HR_ question cols
       return false;
     };
 
@@ -122,6 +122,7 @@ export default async function handler(req, res) {
         bhName:    p.bhName,
         bhEmail:   p.bhEmail,
         status:    p.status,
+        templateType: p.templateType || 'STANDARD',
         lockStatus: p.lockStatus,
         selectedOn: p.selectedOn,
         rmSubmittedOn:   p.rmSubmittedOn,
@@ -149,7 +150,7 @@ export default async function handler(req, res) {
       profileCols,
       rows,
       hrFieldDefs,
-      role: { roleKey: role.roleKey, roleLabel: role.roleLabel }
+      role: { roleKey: role.roleKey, roleLabel: role.roleLabel, templateType: role.templateType || 'STANDARD' }
     });
   } catch (err) {
     console.error('[reports GET]', err);

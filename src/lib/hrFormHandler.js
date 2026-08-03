@@ -18,6 +18,7 @@ import {
   HR_ORDER,
 } from './queries';
 import { runInvitesWithTimeout } from './invites';
+import { questionAudience, isReservedColumnKey } from './ojt';
 
 const FIELDS_KEY = { HR_SPOC: 'hrSpocFields', HR_HEAD: 'hrHeadFields', COTO: 'cotoFields' };
 const AUDIT_ACTION = {
@@ -123,8 +124,7 @@ export function makeHrFormHandler(role) {
             return (
               !questionKeySet.has(kLower) &&
               !routingCols.has(k) &&
-              !/^__EMPTY/.test(k) &&
-              !/^\s*\d+[\.\)]\s/.test(k)
+              !isReservedColumnKey(k)
             );
           })
         );
@@ -140,9 +140,35 @@ export function makeHrFormHandler(role) {
           bhName:    pair.bhName,
         };
 
+        // OJT: Self/RM/BH each answered DIFFERENT questions, so the shared
+        // Self/RM/BH column table doesn't apply. Build segmented read-only
+        // stages (Employee / RM / BH questions → their answers) instead.
+        const isOjt = template?.templateType === 'OJT';
+        let ojtStages = [];
+        if (isOjt) {
+          const allQ = (Array.isArray(template?.questions) ? template.questions : []).map((q) => ({
+            key:      q.question_key || q.key,
+            label:    q.question_label || q.label,
+            order:    q.display_order || q.order || 0,
+            audience: q.audience || questionAudience(q),
+          })).sort((a, b) => a.order - b.order);
+          const sa = pair.selfAnswers || {}, ra = pair.rmAnswers || {}, ba = pair.bhAnswers || {};
+          const stageFor = (aud, label, ans) => ({
+            label, accent: aud,
+            items: allQ.filter((q) => q.audience === aud).map((q) => ({ label: q.label, value: ans[q.key] })),
+          });
+          ojtStages = [
+            stageFor('EMPLOYEE', 'Employee Responses', sa),
+            stageFor('RM', 'RM Responses', ra),
+            stageFor('BH', 'BH Responses', ba),
+          ].filter((s) => s.items.length > 0);
+        }
+
         return res.status(200).json({
           role,
           pair: safePair,
+          isOjt,
+          ojtStages,
           // read-only candidate ratings
           questions,
           readonly: {

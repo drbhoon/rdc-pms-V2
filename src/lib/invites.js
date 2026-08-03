@@ -99,7 +99,9 @@ async function processHrRole({ role, base, isReminder, result }) {
 
   for (const [, groupReviews] of groups) {
     const first = groupReviews[0];
-    if (!first.email) continue;
+    // Skip missing / malformed reviewer emails (e.g. a name typed without a
+    // domain) so one bad row can't error the whole run on every launch.
+    if (!first.email || !/^\S+@\S+\.\S+$/.test(String(first.email).trim())) continue;
     try {
       const link = await getOrCreateReviewerLink(first.email, role, first.pair.roleKey, first.pair.cycle);
       const dashboardUrl = `${base}/reviewer/${link.token}`;

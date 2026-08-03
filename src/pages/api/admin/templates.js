@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       roleKey, roleLabel, questions,
       filename, profileCols,
       rmNameCol, rmEmailCol, bhNameCol, bhEmailCol,
-      includeSelf,
+      includeSelf, templateType,
       // V2 commenter routing + field definitions
       hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
       hrSpocFields, hrHeadFields, cotoFields,
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     try {
       const role = await upsertRole(roleKey, roleLabel, questions, {
-        filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf,
+        filename, profileCols, rmNameCol, rmEmailCol, bhNameCol, bhEmailCol, includeSelf, templateType,
         hrSpocName, hrSpocEmail, hrHeadName, hrHeadEmail, cotoName, cotoEmail,
         hrSpocFields, hrHeadFields, cotoFields,
       });
