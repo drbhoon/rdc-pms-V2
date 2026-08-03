@@ -31,8 +31,8 @@ function StatusBadge({ status }) {
 // Delegates to the shared builder (src/lib/reportXlsx.js) so the admin report
 // and the HR-SPOC one-pair download stay identical. HR commenter values appear
 // as extra columns at the end of each pair's BH row.
-function downloadExcel(roleLabel, cycle, questions, profileCols, rows, hrFieldDefs) {
-  const wb = buildReportWorkbook({ roleLabel, cycle, questions, profileCols, rows, hrFieldDefs });
+function downloadExcel(roleLabel, cycle, questions, profileCols, rows, hrFieldDefs, templateType) {
+  const wb = buildReportWorkbook({ roleLabel, cycle, questions, profileCols, rows, hrFieldDefs, templateType });
   XLSX.writeFile(wb, reportFilename(roleLabel, cycle));
 }
 
@@ -95,7 +95,7 @@ export default function ReportsPage({ user }) {
     if (!data) return;
     setExporting(true);
     try {
-      downloadExcel(data.role.roleLabel, cycle || (tab === 'archived' ? 'Archived' : ''), data.questions, data.profileCols || [], data.rows, data.hrFieldDefs || {});
+      downloadExcel(data.role.roleLabel, cycle || (tab === 'archived' ? 'Archived' : ''), data.questions, data.profileCols || [], data.rows, data.hrFieldDefs || {}, data.role.templateType || 'STANDARD');
     } catch (err) {
       alert('Export failed: ' + err.message);
     } finally {

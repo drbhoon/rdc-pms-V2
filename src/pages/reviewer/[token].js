@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function ReviewerDashboard() {
   const router = useRouter();
@@ -77,13 +78,14 @@ export default function ReviewerDashboard() {
       <div className="bg-slate-900 text-white px-6 py-5">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3">
+            <BrandLogo />
             <span className="text-lg font-bold">RDC PARAKH</span>
             <span className="text-xs text-slate-300">SYSTEM</span>
           </div>
           <div className="mt-3">
             <div className="text-lg font-semibold">{title} Dashboard</div>
             <div className="text-xs text-slate-300 mt-0.5">
-              {role.roleLabel} · {reviewer.cycle} · {reviewer.email}
+              {reviewer.cycle} · {reviewer.email}
             </div>
           </div>
         </div>

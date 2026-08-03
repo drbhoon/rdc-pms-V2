@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,8 +47,8 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4 shadow-lg shadow-blue-600/30">
-            <span className="text-white font-bold text-lg tracking-tight">RDC</span>
+          <div className="mb-4 flex justify-center">
+            <BrandLogo imgClassName="h-10" className="px-2 py-1.5" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">RDC Performance</h1>
           <p className="mt-1 text-sm text-slate-400">

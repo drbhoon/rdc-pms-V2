@@ -8,10 +8,11 @@
  * NO fixed column names required. Detection is dynamic from Excel headers.
  * Template name derived from filename (editable). Delete supported.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import AdminLayout from '../../components/AdminLayout';
 import HrStagesEditor, { ActivationSummary } from '../../components/HrStagesEditor';
+import { audienceForKey } from '../../lib/ojt';
 import { getPageAuth } from '../../lib/auth';
 
 // Seed HR-stage field definitions from auto-detected HR_*/COTO_* columns.
@@ -74,10 +75,11 @@ function classifyHeader(header) {
   if (/\b(qualification|designation|department|plant|location|zone|region|division|branch|city|grade|level)\b/i.test(raw))
     return 'profile';
 
-  // ── Numbered questions → rating  (handles leading spaces too)
-  // Only columns with a leading digit (e.g. "1. Knowledge of Job") are assessment questions
-  if (/^\s*\d+[\.\)]\s/.test(raw))   return 'rating';
-  if (/^Q\d+_RATING$/i.test(raw))    return 'rating';
+  // ── Numbered questions → multiple choice  (handles leading spaces too)
+  // Only columns with a leading digit (e.g. "1. Knowledge of Job") are assessment
+  // questions. They default to a 1–5 choice list, which HR can edit.
+  if (/^\s*\d+[\.\)]\s/.test(raw))   return 'choice';
+  if (/^Q\d+_RATING$/i.test(raw))    return 'choice';
 
   // ── Narrative assessment questions (filled by RM/BH in the form)
   // Only classified as narrative if they explicitly look like RM/BH answer fields
@@ -96,12 +98,25 @@ function classifyHeader(header) {
   return 'profile';
 }
 
-// Question types the HR can switch between
-const Q_TYPES         = ['rating', 'narrative', 'number', 'date', 'profile'];
+// Answer choice presets for the "Multiple Choice" question type (max 10 options).
+const MAX_CHOICES = 10;
+const CHOICE_PRESETS = {
+  '1–5':      ['1', '2', '3', '4', '5'],
+  'Yes / No': ['Yes', 'No'],
+  'Readiness': ['Ready for higher role', 'Ready', 'Ready with Support', 'Not yet Ready', 'Low potential'],
+};
+const DEFAULT_CHOICES = CHOICE_PRESETS['1–5'];
+
+// Question types the HR can switch between. 'rating' is legacy (fixed 1–5) —
+// it is not offered for new questions but is still rendered/kept for templates
+// created before Multiple Choice existed.
+const Q_TYPES         = ['choice', 'narrative', 'number', 'date', 'profile'];
 const PROFILE_TYPES   = ['profile', 'profile_date', 'profile_number']; // profile sub-types
-const ALL_TYPES       = [...Q_TYPES, 'profile_date', 'profile_number'];
+const QUESTION_TYPES  = ['choice', 'rating', 'narrative', 'number', 'date']; // count as questions
+const ALL_TYPES       = [...Q_TYPES, 'rating', 'profile_date', 'profile_number'];
 const Q_LABELS = {
-  rating:          'Rating (1–5)',
+  choice:          'Multiple Choice',
+  rating:          'Rating (1–5) — legacy',
   narrative:       'Narrative (text)',
   number:          'Number',
   date:            'Date',
@@ -110,6 +125,7 @@ const Q_LABELS = {
   profile_number:  'Number (employee info)',
 };
 const Q_BADGE = {
+  choice:         'bg-blue-100 text-blue-700',
   rating:         'bg-blue-100 text-blue-700',
   narrative:      'bg-purple-100 text-purple-700',
   number:         'bg-amber-100 text-amber-700',
@@ -118,6 +134,80 @@ const Q_BADGE = {
   profile_date:   'bg-teal-50 text-teal-700',
   profile_number: 'bg-orange-50 text-orange-700',
 };
+
+// ── Multiple-choice options editor ────────────────────────────────────────────
+// Lets HR define up to MAX_CHOICES answer options for one question, with quick
+// presets (1–5, Yes/No, Readiness). Blank options are dropped on save. An
+// optional "Other" adds a free-text box on the form for a written comment.
+function ChoiceOptionsEditor({ options, onChange, allowOther, onAllowOtherChange }) {
+  const opts = Array.isArray(options) && options.length ? options : DEFAULT_CHOICES;
+
+  function setAt(i, val) {
+    const next = [...opts];
+    next[i] = val;
+    onChange(next);
+  }
+  function removeAt(i) {
+    const next = opts.filter((_, j) => j !== i);
+    onChange(next.length ? next : ['']);
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+      <div className="flex items-center flex-wrap gap-1.5 mb-2">
+        <span className="text-[11px] font-semibold text-slate-500 mr-1">Answer options</span>
+        {Object.entries(CHOICE_PRESETS).map(([label, preset]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => onChange([...preset])}
+            className="px-1.5 py-0.5 rounded border border-slate-200 text-[10px] text-slate-600 hover:bg-slate-50"
+          >
+            {label}
+          </button>
+        ))}
+        <span className="text-[10px] text-slate-400 ml-auto">{opts.length}/{MAX_CHOICES}</span>
+      </div>
+      <div className="space-y-1.5">
+        {opts.map((o, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 w-4 text-right">{i + 1}.</span>
+            <input
+              value={o}
+              onChange={(e) => setAt(i, e.target.value)}
+              placeholder={`Option ${i + 1}`}
+              className="flex-1 text-xs rounded border border-slate-200 px-2 py-1 focus:border-blue-400 focus:outline-none"
+            />
+            {opts.length > 1 && (
+              <button type="button" onClick={() => removeAt(i)} title="Remove option"
+                className="text-slate-300 hover:text-red-500 px-1">✕</button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        {opts.length < MAX_CHOICES ? (
+          <button
+            type="button"
+            onClick={() => onChange([...opts, ''])}
+            className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+          >
+            + Add option
+          </button>
+        ) : <span />}
+        <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!allowOther}
+            onChange={(e) => onAllowOtherChange(e.target.checked)}
+            className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+          />
+          Add “Other” with comment box
+        </label>
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function slugify(name) {
@@ -213,13 +303,44 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   // Initialise columns with auto-classification
   // skipSelf is per-question and only used when includeSelf is true
   const [cols, setCols] = useState(() =>
-    headers.map((h) => ({ header: h, type: classifyHeader(h), skipSelf: false }))
+    headers.map((h) => {
+      const type = classifyHeader(h);
+      return {
+        header: h,
+        type,
+        skipSelf: false,
+        // Multiple-choice answer options — only meaningful for type 'choice'.
+        options: type === 'choice' ? [...DEFAULT_CHOICES] : [],
+        allowOther: false, // add an "Other" free-text box on the form
+      };
+    })
   );
   const [templateName, setTemplateName] = useState(
     filename.replace(/\.[^/.]+$/, '') // strip extension
   );
   const [roleKey, setRoleKey]   = useState(slugify(filename));
   const [includeSelf, setIncludeSelf] = useState(false);
+  // Template flavour: STANDARD (Self→RM→BH→HR), FEEDBACK (employee-only),
+  // or OJT (segmented — Employee / RM_ / BH_ prefixed question groups).
+  const [templateType, setTemplateType] = useState('STANDARD');
+  const isFeedback = templateType === 'FEEDBACK';
+  const isOjt      = templateType === 'OJT';
+
+  // OJT: RM_<n> / BH_<n> columns are reviewer QUESTIONS, but the generic
+  // classifier tends to mark them as profile. When OJT is selected, promote any
+  // such (non-routing) column to a Multiple Choice question so it shows in the
+  // question list and gets saved as a question. HR can still adjust the type.
+  useEffect(() => {
+    if (templateType !== 'OJT') return;
+    setCols((prev) => prev.map((c) => {
+      const isRouting = ['rm_name', 'rm_email', 'bh_name', 'bh_email'].includes(c.type);
+      const isQuestion = QUESTION_TYPES.includes(c.type);
+      if (!isRouting && !isQuestion && /^(RM|BH)[_\s-]*\d/i.test(c.header)) {
+        return { ...c, type: 'choice', options: [...DEFAULT_CHOICES] };
+      }
+      return c;
+    }));
+  }, [templateType]);
   // V2: HR commenter stages, seeded from any detected HR_*/COTO_* columns.
   const [hrStages, setHrStages] = useState(() =>
     seedHrStagesFromCols(headers.map((h) => ({ header: h, type: classifyHeader(h) })))
@@ -244,12 +365,26 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   );
   const identityCols  = nonRoutingCols.filter((c) => c.type === 'identity');
   const profileCols   = nonRoutingCols.filter((c) => PROFILE_TYPES.includes(c.type));
-  const questionCols  = nonRoutingCols.filter((c) =>
-    ['rating', 'narrative', 'number', 'date'].includes(c.type)
-  );
+  const questionCols  = nonRoutingCols.filter((c) => QUESTION_TYPES.includes(c.type));
 
   function updateType(header, newType) {
-    setCols((prev) => prev.map((c) => c.header === header ? { ...c, type: newType } : c));
+    setCols((prev) => prev.map((c) => {
+      if (c.header !== header) return c;
+      // Switching to Multiple Choice seeds the default 1–5 options if this
+      // column has none yet, so the editor always has something to show.
+      const options = newType === 'choice' && !(c.options || []).length
+        ? [...DEFAULT_CHOICES]
+        : c.options;
+      return { ...c, type: newType, options };
+    }));
+  }
+
+  function updateOptions(header, options) {
+    setCols((prev) => prev.map((c) => c.header === header ? { ...c, options } : c));
+  }
+
+  function updateAllowOther(header, allowOther) {
+    setCols((prev) => prev.map((c) => c.header === header ? { ...c, allowOther } : c));
   }
 
   function toggleSkipSelf(header) {
@@ -262,9 +397,28 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   async function handleCreate() {
     if (!roleKey.trim())       return setToast({ message: 'Template Key is required.', type: 'error' });
     if (!templateName.trim())  return setToast({ message: 'Template Name is required.', type: 'error' });
-    if (!questionCols.length)  return setToast({ message: 'No question columns found. Mark some columns as Rating / Narrative / Number / Date.', type: 'error' });
+    if (!questionCols.length)  return setToast({ message: 'No question columns found. Mark some columns as Multiple Choice / Narrative / Number / Date.', type: 'error' });
 
-    const questions = questionCols.map((c, i) => ({
+    // Multiple Choice questions must have at least two non-blank options.
+    const cleanOptions = (c) =>
+      (c.options || []).map((o) => String(o).trim()).filter(Boolean).slice(0, MAX_CHOICES);
+    const badChoice = questionCols.find((c) => c.type === 'choice' && cleanOptions(c).length < 2);
+    if (badChoice) {
+      return setToast({
+        message: `"${badChoice.header}" is Multiple Choice but has fewer than 2 answer options. Add options or change its type.`,
+        type: 'error',
+      });
+    }
+
+    // For OJT, order the question columns by audience (Employee → RM → BH) so
+    // the saved questions and reports read in a sensible sequence, and stamp the
+    // audience derived from each column's prefix.
+    const AUD_ORDER = { EMPLOYEE: 0, RM: 1, BH: 2 };
+    const orderedQuestionCols = isOjt
+      ? [...questionCols].sort((a, b) => AUD_ORDER[audienceForKey(a.header)] - AUD_ORDER[audienceForKey(b.header)])
+      : questionCols;
+
+    const questions = orderedQuestionCols.map((c, i) => ({
       question_key:     c.header,
       question_label:   c.header,
       field_type:       c.type,
@@ -273,6 +427,11 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
       // When self is disabled, the flag is harmless but we still persist false
       // so HR can flip the master switch later without losing per-question intent.
       excludeFromSelf:  !!c.skipSelf,
+      // Multiple Choice: the HR-defined answer options (max 10) + optional
+      // "Other" free-text box.
+      ...(c.type === 'choice' && { options: cleanOptions(c), allowOther: !!c.allowOther }),
+      // OJT: which role answers this question (Employee / RM / BH), from prefix.
+      ...(isOjt && { audience: audienceForKey(c.header) }),
     }));
     const profileColsData = [...identityCols, ...profileCols].map((c) => ({
       key: c.header, label: c.header, field_type: c.type,
@@ -289,21 +448,24 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
           filename,
           questions,
           profileCols: profileColsData,
-          rmNameCol:  rmNameCol  || null,
-          rmEmailCol: rmEmailCol || null,
-          bhNameCol:  bhNameCol  || null,
-          bhEmailCol: bhEmailCol || null,
-          includeSelf: !!includeSelf,
+          templateType,
+          // Feedback templates are employee-only: no RM/BH routing, no HR stages,
+          // and self is always on. Standard templates keep their configured values.
+          rmNameCol:  isFeedback ? null : (rmNameCol  || null),
+          rmEmailCol: isFeedback ? null : (rmEmailCol || null),
+          bhNameCol:  isFeedback ? null : (bhNameCol  || null),
+          bhEmailCol: isFeedback ? null : (bhEmailCol || null),
+          includeSelf: (isFeedback || isOjt) ? true : !!includeSelf,
           // V2 commenter stages
-          hrSpocName:  hrStages.hrSpocName  || null,
-          hrSpocEmail: hrStages.hrSpocEmail || null,
-          hrHeadName:  hrStages.hrHeadName  || null,
-          hrHeadEmail: hrStages.hrHeadEmail || null,
-          cotoName:    hrStages.cotoName    || null,
-          cotoEmail:   hrStages.cotoEmail   || null,
-          hrSpocFields: hrStages.hrSpocFields || [],
-          hrHeadFields: hrStages.hrHeadFields || [],
-          cotoFields:   hrStages.cotoFields   || [],
+          hrSpocName:  isFeedback ? null : (hrStages.hrSpocName  || null),
+          hrSpocEmail: isFeedback ? null : (hrStages.hrSpocEmail || null),
+          hrHeadName:  isFeedback ? null : (hrStages.hrHeadName  || null),
+          hrHeadEmail: isFeedback ? null : (hrStages.hrHeadEmail || null),
+          cotoName:    isFeedback ? null : (hrStages.cotoName    || null),
+          cotoEmail:   isFeedback ? null : (hrStages.cotoEmail   || null),
+          hrSpocFields: isFeedback ? [] : (hrStages.hrSpocFields || []),
+          hrHeadFields: isFeedback ? [] : (hrStages.hrHeadFields || []),
+          cotoFields:   isFeedback ? [] : (hrStages.cotoFields   || []),
         }),
       });
       const data = await res.json();
@@ -328,6 +490,33 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
       {/* Template identity */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <h3 className="text-sm font-semibold text-slate-700 mb-4">Template Identity</h3>
+
+        {/* Template type tabs */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-slate-600 mb-1.5">Template Type</label>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            {[
+              { key: 'STANDARD', label: 'Standard', desc: 'Self → RM → BH → HR' },
+              { key: 'FEEDBACK', label: 'Feedback', desc: 'Employee only → report' },
+              { key: 'OJT',      label: 'OJT',      desc: 'Segmented questions' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTemplateType(t.key)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  templateType === t.key
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+                <span className="block text-[10px] font-normal text-slate-400">{t.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -353,30 +542,70 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
           &nbsp;·&nbsp; <span className="font-medium text-slate-500">Profile fields:</span> {identityCols.length + profileCols.length}
         </p>
 
-        {/* Self-assessment master switch */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-start gap-3">
-          <label className="inline-flex items-center cursor-pointer mt-0.5">
-            <input
-              type="checkbox"
-              checked={includeSelf}
-              onChange={(e) => setIncludeSelf(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm font-semibold text-slate-700">Has self-assessment</span>
-          </label>
-          <div className="text-xs text-slate-400 leading-relaxed">
-            When enabled, every assessment launched against this template starts with a self-assessment by the employee
-            (using <code className="font-mono bg-slate-50 px-1 rounded">EMP_EMAIL</code> from the Employees file).
-            The RM is invited automatically once the self-assessment is submitted.
-            By default the self-form asks <strong>every</strong> question — tick <em>"Skip Self"</em> below
-            for the few evaluative questions (e.g. Salary Recommendation) that should not be shown to the employee.
+        {isFeedback ? (
+          /* Feedback mode note — RM/BH/HR settings below are ignored */
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex items-start gap-3 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800 leading-relaxed">
+              <svg className="mt-0.5 w-4 h-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+              <div>
+                <strong>Feedback template</strong> — only the employee fills the form
+                (using <code className="font-mono bg-white/60 px-1 rounded">EMP_EMAIL</code> from the Employees file).
+                The assessment finalises as soon as the employee submits, and HR downloads an
+                employee-wise Excel report. Any RM / BH / HR routing below is ignored for this type.
+              </div>
+            </div>
           </div>
-        </div>
+        ) : isOjt ? (
+          /* OJT mode note — segmented questions; self always on */
+          <>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-start gap-3 rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 text-xs text-violet-800 leading-relaxed">
+                <svg className="mt-0.5 w-4 h-4 shrink-0 text-violet-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                <div>
+                  <strong>OJT (segmented) template</strong> — Employee, RM and BH each answer their <strong>own</strong> questions.
+                  Tag questions by column prefix:
+                  <code className="font-mono bg-white/60 px-1 rounded ml-1">RM_1, RM_2…</code> → RM questions;
+                  <code className="font-mono bg-white/60 px-1 rounded ml-1">BH_1, BH_2…</code> → BH questions;
+                  everything else → Employee questions.
+                  (<code className="font-mono bg-white/60 px-1 rounded">RM_NAME/RM_EMAIL/BH_NAME/BH_EMAIL</code> stay routing.)
+                  The employee always fills first; each later role sees prior answers read-only. The HR loop below still applies.
+                </div>
+              </div>
+            </div>
 
-        {/* Pipeline activation summary */}
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <ActivationSummary includeSelf={includeSelf} value={hrStages} />
-        </div>
+            {/* Pipeline activation summary — self always on for OJT */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <ActivationSummary includeSelf={true} value={hrStages} />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Self-assessment master switch */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-start gap-3">
+              <label className="inline-flex items-center cursor-pointer mt-0.5">
+                <input
+                  type="checkbox"
+                  checked={includeSelf}
+                  onChange={(e) => setIncludeSelf(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm font-semibold text-slate-700">Has self-assessment</span>
+              </label>
+              <div className="text-xs text-slate-400 leading-relaxed">
+                When enabled, every assessment launched against this template starts with a self-assessment by the employee
+                (using <code className="font-mono bg-slate-50 px-1 rounded">EMP_EMAIL</code> from the Employees file).
+                The RM is invited automatically once the self-assessment is submitted.
+                By default the self-form asks <strong>every</strong> question — tick <em>"Skip Self"</em> below
+                for the few evaluative questions (e.g. Salary Recommendation) that should not be shown to the employee.
+              </div>
+            </div>
+
+            {/* Pipeline activation summary */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <ActivationSummary includeSelf={includeSelf} value={hrStages} />
+            </div>
+          </>
+        )}
       </div>
 
       {/* V2: HR commenter stages */}
@@ -494,34 +723,52 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {nonRoutingCols.map((c, i) => {
-                  const isQ = ['rating', 'narrative', 'number', 'date'].includes(c.type);
+                  const isQ = QUESTION_TYPES.includes(c.type);
                   if (!isQ) return null;
                   const qNum = questionCols.findIndex((q) => q.header === c.header) + 1;
+                  // Legacy 'rating' isn't offered for new questions, but must stay
+                  // selectable while a question still uses it.
+                  const typeChoices = c.type === 'rating' ? ['rating', ...Q_TYPES] : Q_TYPES;
                   return (
-                    <tr key={c.header} className="hover:bg-slate-50/60">
-                      <td className="px-3 py-2 text-slate-400">{qNum}</td>
-                      <td className="px-3 py-2 text-slate-700 max-w-xs" title={c.header}>
-                        <span className="truncate block">{c.header}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <select value={c.type}
-                          onChange={(e) => updateType(c.header, e.target.value)}
-                          className="w-full text-xs rounded border border-slate-200 px-1.5 py-1 focus:border-blue-400 focus:outline-none bg-white">
-                          {Q_TYPES.map((t) => <option key={t} value={t}>{Q_LABELS[t]}</option>)}
-                        </select>
-                      </td>
-                      {includeSelf && (
-                        <td className="px-3 py-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={!!c.skipSelf}
-                            onChange={() => toggleSkipSelf(c.header)}
-                            title="Skip this question in the employee's self-assessment"
-                            className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                          />
+                    <Fragment key={c.header}>
+                      <tr className="hover:bg-slate-50/60">
+                        <td className="px-3 py-2 text-slate-400 align-top">{qNum}</td>
+                        <td className="px-3 py-2 text-slate-700 max-w-xs align-top" title={c.header}>
+                          <span className="truncate block">{c.header}</span>
                         </td>
+                        <td className="px-3 py-2 align-top">
+                          <select value={c.type}
+                            onChange={(e) => updateType(c.header, e.target.value)}
+                            className="w-full text-xs rounded border border-slate-200 px-1.5 py-1 focus:border-blue-400 focus:outline-none bg-white">
+                            {typeChoices.map((t) => <option key={t} value={t}>{Q_LABELS[t]}</option>)}
+                          </select>
+                        </td>
+                        {includeSelf && (
+                          <td className="px-3 py-2 text-center align-top">
+                            <input
+                              type="checkbox"
+                              checked={!!c.skipSelf}
+                              onChange={() => toggleSkipSelf(c.header)}
+                              title="Skip this question in the employee's self-assessment"
+                              className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                            />
+                          </td>
+                        )}
+                      </tr>
+                      {c.type === 'choice' && (
+                        <tr className="bg-slate-50/60">
+                          <td></td>
+                          <td colSpan={includeSelf ? 3 : 2} className="px-3 pb-3">
+                            <ChoiceOptionsEditor
+                              options={c.options}
+                              onChange={(opts) => updateOptions(c.header, opts)}
+                              allowOther={c.allowOther}
+                              onAllowOtherChange={(v) => updateAllowOther(c.header, v)}
+                            />
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -717,7 +964,8 @@ function TemplateList({ refreshKey }) {
   }
 
   const typeBadge = (t) => ({
-    rating: 'bg-blue-100 text-blue-700', narrative: 'bg-purple-100 text-purple-700',
+    choice: 'bg-blue-100 text-blue-700', rating: 'bg-blue-100 text-blue-700',
+    narrative: 'bg-purple-100 text-purple-700',
     number: 'bg-amber-100 text-amber-700', date: 'bg-green-100 text-green-700',
   }[t] || 'bg-slate-100 text-slate-500');
 
@@ -751,7 +999,17 @@ function TemplateList({ refreshKey }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800 break-all leading-snug">
                       {r.roleLabel || r.roleKey}
-                      {view.includeSelf && (
+                      {r.templateType === 'FEEDBACK' && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-200 align-middle">
+                          Feedback
+                        </span>
+                      )}
+                      {r.templateType === 'OJT' && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 align-middle">
+                          OJT
+                        </span>
+                      )}
+                      {r.templateType !== 'FEEDBACK' && r.templateType !== 'OJT' && view.includeSelf && (
                         <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 align-middle">
                           + Self
                         </span>
@@ -950,7 +1208,7 @@ export default function SetupPage({ user }) {
               {/* What goes in the Excel */}
               <div className="mt-6 p-4 bg-slate-50 rounded-xl text-xs text-slate-500 space-y-1.5">
                 <p className="font-semibold text-slate-600">Step 1 — put these in your Assessment Excel (column headers only):</p>
-                <p>• <strong>Numbered columns</strong> (1. … 14. …) become the <strong>rating questions</strong> RM &amp; BH answer.</p>
+                <p>• <strong>Numbered columns</strong> (1. … 14. …) become <strong>Multiple Choice questions</strong> RM &amp; BH answer — options default to 1–5 and can be changed to Yes/No or your own text (max 5) on the next screen.</p>
                 <p>• <strong>Narrative columns</strong> (Comments, Recommendation…) become text questions.</p>
                 <p>• <strong>Profile fields</strong> (Qualification, Designation…) are stored for reference, not scored.</p>
                 <p>• <strong>HR comment columns</strong> — name them <code className="font-mono bg-white px-1 rounded">HR_SPOC_*</code>, <code className="font-mono bg-white px-1 rounded">HR_HEAD_*</code>, <code className="font-mono bg-white px-1 rounded">COTO_*</code> (e.g. HR_SPOC_COMMENTS, COTO_APPROVAL). They're auto-sorted into the HR stages, NOT asked of RM/BH.</p>

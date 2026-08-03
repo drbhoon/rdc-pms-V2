@@ -3,6 +3,9 @@
  * Public RM Assessment Form — no login required; token IS the auth.
  */
 import { useState } from 'react';
+import BrandLogo from '../../../components/BrandLogo';
+import PriorAnswersPanel from '../../../components/PriorAnswersPanel';
+import ChoiceField from '../../../components/ChoiceField';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -19,6 +22,11 @@ function QuestionField({ question, value, onChange, disabled, hasError }) {
   const { key, fieldType } = question;
   const errCls = hasError ? 'border-red-400 bg-red-50/30' : 'border-slate-300';
   const base = `w-full rounded-lg border px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-500 transition-all ${errCls}`;
+
+  // Multiple Choice — HR-defined options + optional "Other" comment box.
+  if (fieldType === 'choice') {
+    return <ChoiceField question={question} value={value} onChange={onChange} disabled={disabled} baseClassName={base} />;
+  }
 
   if (fieldType === 'rating') {
     return (
@@ -105,7 +113,7 @@ function ProfileCard({ empCode, empName, profileData }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RmFormPage({ pair, questions, employee, token }) {
+export default function RmFormPage({ pair, questions, employee, isOjt, priorStages, token }) {
   const router = typeof window !== 'undefined'
     ? (new URLSearchParams(window.location.search))
     : null;
@@ -166,9 +174,7 @@ export default function RmFormPage({ pair, questions, employee, token }) {
       {/* ── Header ── */}
       <header className="bg-[#0f172a] text-white shadow-md">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
-            RDC
-          </div>
+          <BrandLogo />
           <div>
             <div className="font-bold text-base leading-tight tracking-tight">RDC PMS</div>
             <div className="text-xs text-slate-400 leading-tight">RM Assessment Form</div>
@@ -191,6 +197,7 @@ export default function RmFormPage({ pair, questions, employee, token }) {
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         {/* Profile card */}
         <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
+        {isOjt && <PriorAnswersPanel stages={priorStages} title="Employee's Responses" />}
 
         {/* Locked notice */}
         {isLocked && (
@@ -308,9 +315,11 @@ export async function getServerSideProps({ params, req }) {
     const data = await res.json();
     return {
       props: {
-        pair:      data.pair,
-        questions: data.questions,
-        employee:  data.employee || null,
+        pair:        data.pair,
+        questions:   data.questions,
+        employee:    data.employee || null,
+        isOjt:       !!data.isOjt,
+        priorStages: data.priorStages || [],
         token,
       },
     };

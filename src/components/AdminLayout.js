@@ -5,6 +5,7 @@
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import clsx from 'clsx';
+import BrandLogo from './BrandLogo';
 
 const NAV = [
   {
@@ -45,9 +46,7 @@ export default function AdminLayout({ children, user, title }) {
         {/* Logo */}
         <div className="px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">
-              RDC
-            </div>
+            <BrandLogo />
             <div>
               <div className="font-semibold text-sm leading-tight">Performance</div>
               <div className="text-xs text-slate-400 leading-tight">Management System</div>

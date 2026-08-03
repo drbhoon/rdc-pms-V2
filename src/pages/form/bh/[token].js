@@ -4,6 +4,9 @@
  * Pre-populated with RM answers; shows RM reference for rating questions.
  */
 import { useState } from 'react';
+import BrandLogo from '../../../components/BrandLogo';
+import PriorAnswersPanel from '../../../components/PriorAnswersPanel';
+import ChoiceField from '../../../components/ChoiceField';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -23,11 +26,21 @@ function QuestionField({ question, value, onChange, disabled, rmValue, hasError 
   const errCls = hasError ? 'border-red-400 bg-red-50/30' : 'border-slate-300';
   const base = `w-full rounded-lg border px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:bg-slate-50 disabled:text-slate-500 transition-all ${errCls}`;
 
-  const rmRef = rmValue && fieldType === 'rating' ? (
+  const rmRef = rmValue && (fieldType === 'rating' || fieldType === 'choice') ? (
     <span className="text-xs text-slate-400 mt-1 block">
-      RM gave: {rmValue} – {RATING_LABEL[rmValue] || rmValue}
+      RM gave: {fieldType === 'rating' ? `${rmValue} – ${RATING_LABEL[rmValue] || rmValue}` : rmValue}
     </span>
   ) : null;
+
+  // Multiple Choice — HR-defined options + optional "Other" comment box.
+  if (fieldType === 'choice') {
+    return (
+      <div>
+        <ChoiceField question={question} value={value} onChange={onChange} disabled={disabled} baseClassName={base} />
+        {rmRef}
+      </div>
+    );
+  }
 
   if (fieldType === 'rating') {
     return (
@@ -108,8 +121,12 @@ function ProfileCard({ empCode, empName, profileData }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function BhFormPage({ pair, questions, employee, token }) {
+export default function BhFormPage({ pair, questions, employee, isOjt, priorStages, token }) {
   const rmAnswers = pair.rmAnswers || {};
+  // No RM on this assessment — the RM stage was skipped and ratings are blank,
+  // so the BH fills the form from scratch rather than reviewing RM answers.
+  // (Not applicable to OJT, where BH answers its own distinct questions.)
+  const noRm = !isOjt && Object.keys(rmAnswers).length === 0;
 
   // Detect ?back=<dashboard> so we can return the user after submit
   const backUrl =
@@ -233,6 +250,7 @@ export default function BhFormPage({ pair, questions, employee, token }) {
       <IdentityStrip pair={pair} />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         <ProfileCard profileData={employee?.profileData} />
+        {isOjt && <PriorAnswersPanel stages={priorStages} title="Employee & RM Responses" />}
 
         {submitted ? (
           <div className="bg-white rounded-2xl border border-green-200 shadow-sm px-8 py-12 text-center">
@@ -261,7 +279,13 @@ export default function BhFormPage({ pair, questions, employee, token }) {
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100">
                 <h2 className="text-sm font-semibold text-slate-700">BH Assessment Questions</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Pre-filled with RM answers. Review and adjust as needed.</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isOjt
+                    ? 'Answer your BH questions below. Employee and RM responses are shown above for reference.'
+                    : noRm
+                      ? 'No Reporting Manager is assigned for this employee — please complete the full assessment.'
+                      : 'Pre-filled with RM answers. Review and adjust as needed.'}
+                </p>
               </div>
               <div className="divide-y divide-slate-100">
                 {questions.map((q, idx) => {
@@ -330,9 +354,7 @@ function BhHeader() {
   return (
     <header className="bg-[#0f172a] text-white shadow-md">
       <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-        <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
-          RDC
-        </div>
+        <BrandLogo />
         <div>
           <div className="font-bold text-base leading-tight tracking-tight">RDC PARAKH</div>
           <div className="text-xs text-slate-400 leading-tight">BH Assessment Form</div>
@@ -377,9 +399,11 @@ export async function getServerSideProps({ params, req }) {
     const data = await res.json();
     return {
       props: {
-        pair:      data.pair,
-        questions: data.questions,
-        employee:  data.employee || null,
+        pair:        data.pair,
+        questions:   data.questions,
+        employee:    data.employee || null,
+        isOjt:       !!data.isOjt,
+        priorStages: data.priorStages || [],
         token,
       },
     };

@@ -84,15 +84,24 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
-  const autoFilled = role?.rmNameCol && (
+  const isFeedback = role?.templateType === 'FEEDBACK';
+  const autoFilled = !isFeedback && role?.rmNameCol && (
     form.rmName || form.rmEmail || form.bhName || form.bhEmail
   );
 
   function set(field, val) { setForm((f) => ({ ...f, [field]: val })); }
 
   async function handleConfirm() {
-    if (!form.rmName || !form.rmEmail || !form.bhName || !form.bhEmail) {
-      return setError('All four fields are required.');
+    // Feedback templates are employee-only — no RM/BH routing to validate.
+    if (!isFeedback) {
+      // BH is mandatory. RM is optional — if left blank, the RM stage is skipped
+      // and the assessment routes straight to BH with blank RM ratings.
+      if (!form.bhName || !form.bhEmail) {
+        return setError('Business Head name and email are required.');
+      }
+      if ((form.rmName && !form.rmEmail) || (!form.rmName && form.rmEmail)) {
+        return setError('Enter both RM name and email, or leave both blank to route straight to BH.');
+      }
     }
     setSaving(true);
     setError('');
@@ -106,7 +115,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
           empCode: employee.empCode,
           empName: employee.empName,
           startOn: localStartOn || null,
-          ...form,
+          ...(isFeedback ? {} : form),
         }),
       });
       const data = await res.json();
@@ -155,11 +164,20 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
         )}
 
         <div className="space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Reporting Manager</p>
+          {isFeedback && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
+              Feedback template — only the employee fills this (via EMP_EMAIL). No RM/BH needed; it finalises on submit.
+            </div>
+          )}
+          {!isFeedback && (
+          <>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            Reporting Manager <span className="normal-case font-normal text-slate-400">(optional — leave blank to route straight to BH)</span>
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                RM Name <span className="text-red-500">*</span>
+                RM Name
                 {role?.rmNameCol && <span className="ml-1 text-slate-400">({role.rmNameCol})</span>}
               </label>
               <input value={form.rmName} onChange={(e) => set('rmName', e.target.value)}
@@ -168,7 +186,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
             </div>
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                RM Email <span className="text-red-500">*</span>
+                RM Email
                 {role?.rmEmailCol && <span className="ml-1 text-slate-400">({role.rmEmailCol})</span>}
               </label>
               <input type="email" value={form.rmEmail} onChange={(e) => set('rmEmail', e.target.value)}
@@ -176,6 +194,8 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
                 placeholder="rm@rdcconcrete.com" />
             </div>
           </div>
+          </>
+          )}
           <div className="pt-1">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
               Start On <span className="normal-case text-slate-400">(optional — invite email sent on/after this date)</span>
@@ -188,6 +208,8 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
             />
             <p className="text-xs text-slate-400 mt-1">Leave blank to send the invite in the next cron tick.</p>
           </div>
+          {!isFeedback && (
+          <>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Business Head</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -209,6 +231,8 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
                 placeholder="bh@rdcconcrete.com" />
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mt-6">
@@ -390,32 +414,45 @@ export default function AssessmentsPage({ user }) {
     setBulkResult(null);
 
     const targets = employees.filter((e) => selected.has(e.empCode) && !pairMap[e.empCode]);
-    let ok = 0, skipped = 0;
+    const isFeedback = currentRole?.templateType === 'FEEDBACK';
+    let ok = 0, skipped = 0, noRm = 0;
     const errors = [];
 
     for (const emp of targets) {
       const pd = emp.profileData || {};
-      const rmName  = String(pd[currentRole?.rmNameCol]  || '').trim();
-      const rmEmail = String(pd[currentRole?.rmEmailCol] || '').trim();
-      const bhName  = String(pd[currentRole?.bhNameCol]  || '').trim();
-      const bhEmail = String(pd[currentRole?.bhEmailCol] || '').trim();
 
-      if (!rmName || !rmEmail || !bhName || !bhEmail) {
-        skipped++;
-        errors.push(`${emp.empName} (${emp.empCode}): missing routing data`);
-        continue;
+      let body;
+      if (isFeedback) {
+        // Feedback templates are employee-only — no RM/BH routing needed. The
+        // create endpoint pulls the employee's EMP_EMAIL for the self invite.
+        body = { roleKey, cycle, empCode: emp.empCode, empName: emp.empName, startOn: startOn || null };
+      } else {
+        const rmName  = String(pd[currentRole?.rmNameCol]  || '').trim();
+        const rmEmail = String(pd[currentRole?.rmEmailCol] || '').trim();
+        const bhName  = String(pd[currentRole?.bhNameCol]  || '').trim();
+        const bhEmail = String(pd[currentRole?.bhEmailCol] || '').trim();
+
+        // BH is mandatory. RM is optional — when blank, the assessment skips the
+        // RM stage and routes straight to BH with blank RM ratings.
+        if (!bhName || !bhEmail) {
+          skipped++;
+          errors.push(`${emp.empName} (${emp.empCode}): missing BH routing`);
+          continue;
+        }
+        if (!rmName || !rmEmail) noRm++;
+        body = {
+          roleKey, cycle,
+          empCode: emp.empCode, empName: emp.empName,
+          rmName, rmEmail, bhName, bhEmail,
+          startOn: startOn || null,
+        };
       }
 
       try {
         const res = await fetch('/api/admin/pairs/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roleKey, cycle,
-            empCode: emp.empCode, empName: emp.empName,
-            rmName, rmEmail, bhName, bhEmail,
-            startOn: startOn || null,
-          }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed');
@@ -426,7 +463,7 @@ export default function AssessmentsPage({ user }) {
       }
     }
 
-    setBulkResult({ ok, skipped, errors });
+    setBulkResult({ ok, skipped, noRm, errors });
 
     // Always fire invites after a successful launch. runInvites() filters
     // internally for `startOn IS NULL OR startOn <= now()`, so future-dated
@@ -444,7 +481,7 @@ export default function AssessmentsPage({ user }) {
       } catch (e) { /* silent — cron will pick up any missed invites */ }
     }
 
-    setBulkResult({ ok, skipped, errors, invitesAutoFired });
+    setBulkResult({ ok, skipped, noRm, errors, invitesAutoFired });
     setBulkLaunching(false);
     loadData();
   }
@@ -560,6 +597,7 @@ export default function AssessmentsPage({ user }) {
       {bulkResult && (
         <div className={`mb-4 rounded-xl px-5 py-3 text-sm border ${bulkResult.skipped === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
           <span className="font-semibold">{bulkResult.ok} launched</span>
+          {bulkResult.noRm > 0 && <span className="ml-2 text-slate-600">({bulkResult.noRm} had no RM — routed straight to BH with blank RM ratings)</span>}
           {bulkResult.skipped > 0 && <span className="ml-2 text-amber-700">{bulkResult.skipped} skipped — {bulkResult.errors.join('; ')}</span>}
           {bulkResult.ok > 0 && (
             <span className="ml-2 text-emerald-700">

@@ -5,6 +5,8 @@
  * `includeSelf=true`. Subset of questions (excludeFromSelf=true filtered out).
  */
 import { useState } from 'react';
+import ChoiceField from '../../../components/ChoiceField';
+import BrandLogo from '../../../components/BrandLogo';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -21,6 +23,11 @@ function QuestionField({ question, value, onChange, disabled, hasError }) {
   const { key, fieldType } = question;
   const errCls = hasError ? 'border-red-400 bg-red-50/30' : 'border-slate-300';
   const base = `w-full rounded-lg border px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-500 transition-all ${errCls}`;
+
+  // Multiple Choice — HR-defined options + optional "Other" comment box.
+  if (fieldType === 'choice') {
+    return <ChoiceField question={question} value={value} onChange={onChange} disabled={disabled} baseClassName={base} />;
+  }
 
   if (fieldType === 'rating') {
     return (
@@ -65,12 +72,16 @@ function QuestionField({ question, value, onChange, disabled, hasError }) {
 
 // ── Profile card ─────────────────────────────────────────────────────────────
 
-function ProfileCard({ empCode, empName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
   const [open, setOpen] = useState(true);
   const profileEntries = Object.entries(profileData || {});
+  // Reviewer/approver NAMES are shown (not their questions). Hidden when blank
+  // (e.g. Feedback templates, or an employee with no RM).
   const fixed = [
     empCode ? ['EMP CODE', empCode] : null,
     empName ? ['EMP NAME', empName] : null,
+    rmName && String(rmName).trim() ? ['RM NAME', rmName] : null,
+    bhName && String(bhName).trim() ? ['BH NAME', bhName] : null,
   ].filter(Boolean);
   const entries = [...fixed, ...profileEntries];
   if (!entries.length) return null;
@@ -103,6 +114,8 @@ function ProfileCard({ empCode, empName, profileData }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SelfFormPage({ pair, questions, employee, token }) {
+  // Feedback templates are employee-only — no RM/BH follows the submission.
+  const isFeedback = pair.templateType === 'FEEDBACK';
   const router = typeof window !== 'undefined'
     ? (new URLSearchParams(window.location.search))
     : null;
@@ -164,12 +177,10 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
       {/* ── Header ── */}
       <header className="bg-[#0f172a] text-white shadow-md">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
-            RDC
-          </div>
+          <BrandLogo />
           <div>
             <div className="font-bold text-base leading-tight tracking-tight">RDC PARAKH</div>
-            <div className="text-xs text-slate-400 leading-tight">Self Assessment</div>
+            <div className="text-xs text-slate-400 leading-tight">{isFeedback ? 'Feedback Form' : 'Self Assessment'}</div>
           </div>
         </div>
       </header>
@@ -189,17 +200,17 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
         {/* Intro / context block */}
         {!submitted && !isLocked && (
           <div className="mb-5 rounded-xl bg-indigo-50 border border-indigo-200 px-5 py-4 text-sm text-indigo-900">
-            <div className="font-semibold mb-1">Your Self-Assessment</div>
+            <div className="font-semibold mb-1">{isFeedback ? 'Your Feedback' : 'Your Self-Assessment'}</div>
             <p className="text-xs text-indigo-800 leading-relaxed">
-              Please rate yourself honestly against the questions below. Your answers will be visible
-              to your Reporting Manager and Branch Head when they complete their reviews. Once you submit,
-              your RM will be notified automatically.
+              {isFeedback
+                ? 'Please answer the questions below honestly. Once you submit, your response is recorded — there are no further steps.'
+                : 'Please rate yourself honestly against the questions below. Your answers will be visible to your Reporting Manager and Branch Head when they complete their reviews. Once you submit, your RM will be notified automatically.'}
             </p>
           </div>
         )}
 
         {/* Profile card */}
-        <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
 
         {/* Locked notice */}
         {isLocked && !submitted && (
@@ -222,9 +233,11 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Self-assessment submitted.</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">{isFeedback ? 'Feedback submitted.' : 'Self-assessment submitted.'}</h2>
             <p className="text-slate-500 text-sm">
-              Thank you. Your Reporting Manager has been notified and will complete their review.
+              {isFeedback
+                ? 'Thank you for your feedback. Your response has been recorded.'
+                : 'Thank you. Your Reporting Manager has been notified and will complete their review.'}
               {backUrl ? ' Returning…' : ' You may close this window.'}
             </p>
             {backUrl && (

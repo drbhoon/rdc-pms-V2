@@ -11,6 +11,8 @@
  * Driven entirely by the data returned from /api/form/<role>/[token].
  */
 import { useState } from 'react';
+import BrandLogo from './BrandLogo';
+import PriorAnswersPanel from './PriorAnswersPanel';
 
 const RATING_LABEL = {
   '1': '1 – Poor', '2': '2 – Below Average', '3': '3 – Average',
@@ -65,9 +67,12 @@ function CandidatePanel({ questions, readonly }) {
   if (!questions || questions.length === 0) return null;
   const showSelf = readonly?.requireSelf && readonly?.selfAnswers;
 
-  const cell = (val) => (val === undefined || val === null || val === '')
-    ? <span className="text-slate-300">—</span>
-    : (RATING_LABEL[String(val)] || String(val));
+  // Only the legacy fixed 1–5 'rating' type carries Poor…Excellent labels.
+  // Multiple Choice answers are shown exactly as HR defined the option.
+  const cell = (q, val) => {
+    if (val === undefined || val === null || val === '') return <span className="text-slate-300">—</span>;
+    return q?.fieldType === 'rating' ? (RATING_LABEL[String(val)] || String(val)) : String(val);
+  };
 
   return (
     <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -94,9 +99,9 @@ function CandidatePanel({ questions, readonly }) {
                 <tr key={q.key}>
                   <td className="px-4 py-2 text-slate-400">{i + 1}</td>
                   <td className="px-4 py-2 text-slate-700">{q.label}</td>
-                  {showSelf && <td className="px-4 py-2 text-indigo-700">{cell(readonly.selfAnswers[q.key])}</td>}
-                  <td className="px-4 py-2 text-blue-700">{cell(readonly.rmAnswers[q.key])}</td>
-                  <td className="px-4 py-2 text-green-700">{cell(readonly.bhAnswers[q.key])}</td>
+                  {showSelf && <td className="px-4 py-2 text-indigo-700">{cell(q, readonly.selfAnswers[q.key])}</td>}
+                  <td className="px-4 py-2 text-blue-700">{cell(q, readonly.rmAnswers[q.key])}</td>
+                  <td className="px-4 py-2 text-green-700">{cell(q, readonly.bhAnswers[q.key])}</td>
                 </tr>
               ))}
             </tbody>
@@ -108,11 +113,15 @@ function CandidatePanel({ questions, readonly }) {
 }
 
 // ── Employee profile card (basic info — same as RM/BH forms) ──────────────────
-function ProfileCard({ empCode, empName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
   const [open, setOpen] = useState(true);
+  // RM/BH names are stripped from profileData (routing columns), so surface them
+  // explicitly here. RM is left blank when the employee has no Reporting Manager.
   const entries = [
     empCode ? ['EMP CODE', empCode] : null,
     empName ? ['EMP NAME', empName] : null,
+    ['RM NAME', rmName && String(rmName).trim() ? rmName : '—'],
+    ['BH NAME', bhName && String(bhName).trim() ? bhName : '—'],
     ...Object.entries(profileData || {}),
   ].filter(Boolean);
   if (entries.length === 0) return null;
@@ -169,7 +178,7 @@ function PriorHrPanel({ priorHr }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function HrCommenterForm({ role, token, data }) {
   const accent = ACCENTS[role] || ACCENTS.HR_SPOC;
-  const { pair, questions, readonly, priorHr, fields, existing, alreadySubmitted, employee } = data;
+  const { pair, questions, readonly, priorHr, fields, existing, alreadySubmitted, employee, isOjt, ojtStages } = data;
 
   const router = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const backUrl = router ? router.get('back') : '';
@@ -226,7 +235,7 @@ export default function HrCommenterForm({ role, token, data }) {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className={`${accent.bar} text-white shadow-md`}>
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <div className={`w-10 h-10 rounded-lg ${accent.chip} flex items-center justify-center font-bold text-sm shrink-0`}>RDC</div>
+          <BrandLogo />
           <div>
             <div className="font-bold text-base leading-tight tracking-tight">RDC PARAKH</div>
             <div className="text-xs text-white/70 leading-tight">{accent.title}</div>
@@ -255,8 +264,10 @@ export default function HrCommenterForm({ role, token, data }) {
           </div>
         )}
 
-        <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
-        <CandidatePanel questions={questions} readonly={readonly} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
+        {isOjt
+          ? <PriorAnswersPanel stages={ojtStages} title="Employee / RM / BH Responses" />
+          : <CandidatePanel questions={questions} readonly={readonly} />}
         <PriorHrPanel priorHr={priorHr} />
 
         {locked && !submitted && (
