@@ -46,12 +46,53 @@ export function decodeSession(cookieVal) {
   }
 }
 
-/** Get current user from request cookies */
+// ── HR platform single sign-on ──────────────────────────────────────────────
+// On hr.rdcc.ai, nginx has already verified the caller against the HR
+// allowlist and forwards their address as X-Auth-Email. It blanks that header
+// on every inbound request and re-sets it only from the auth_request result,
+// so — unlike the cookie below — it cannot be forged by a caller.
+//
+// When SSO is on, the cookie is ignored ENTIRELY. That is deliberate: the
+// session cookie is unsigned base64 JSON, so anyone could encode
+// {"role":"HR_SUPER_ADMIN"} into it. Trusting only the header removes that.
+const REQUIRE_SSO = process.env.REQUIRE_SSO === 'true';
+
+const SSO_SUPER_ADMINS = String(process.env.SUPER_ADMINS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+/** Build an HR user from the platform-verified identity. */
+function ssoUser(email) {
+  const normEmail = String(email).trim().toLowerCase();
+  const localPart = normEmail.split('@')[0] || normEmail;
+  return {
+    // No HrUser row is created: nothing downstream uses user.id — audit
+    // entries and ownership are all recorded by e-mail address.
+    id: null,
+    email: normEmail,
+    name: localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ') || normEmail,
+    role: SSO_SUPER_ADMINS.includes(normEmail) ? 'HR_SUPER_ADMIN' : 'HR_ADMIN',
+    sso: true,
+  };
+}
+
+/** Get current user from the platform identity, or the session cookie. */
 export function getSessionUser(req) {
+  if (REQUIRE_SSO) {
+    const email = req?.headers?.['x-auth-email'];
+    return email ? ssoUser(email) : null;
+  }
   const raw = req?.cookies?.[SESSION_COOKIE];
   if (!raw) return null;
   return decodeSession(raw);
 }
+
+export { REQUIRE_SSO };
 
 /** Require HR auth — returns user or sends 401 */
 export function requireAuth(req, res) {
