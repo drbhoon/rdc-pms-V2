@@ -22,6 +22,10 @@ model RoleTemplate {
   bhNameCol    String? // header that holds approver (BH) name
   bhEmailCol   String? // header that holds approver email
   includeSelf  Boolean  @default(false) // when true, every pair launched against this template gets a self-assessment step before RM
+  // Template flavour. STANDARD = Self(opt)→RM→BH→HR (RM/BH rate the same questions).
+  // FEEDBACK = employee-only; finalises after Self, HR downloads an employee-wise report.
+  // OJT      = segmented questions (Employee / RM_ / BH_ prefixes), each role fills its own.
+  templateType String   @default("STANDARD")
   // ── V2: post-BH commenter stages (HR_SPOC → HR_HEAD → COTO) ──────────────
   // These three are COMMENTERS, not assessors. Routing is template-level
   // (same trio for every employee under this template). A stage is "active"
@@ -94,6 +98,15 @@ model AssessmentPair {
   // Snapshot of RoleTemplate.includeSelf at the moment HR clicked Launch, so
   // toggling the template later doesn't retro-affect in-flight pairs.
   requireSelf     Boolean    @default(false)
+  // Snapshot of the template flavour at launch (STANDARD | FEEDBACK | OJT) so
+  // later template edits don't retro-affect in-flight pairs. FEEDBACK pairs
+  // finalise immediately after the Self submission.
+  templateType    String     @default("STANDARD")
+  // Snapshot of whether this pair has a Reporting Manager. When an employee has
+  // no RM_NAME/RM_EMAIL at launch, requireRm=false: the RM stage is skipped, RM
+  // ratings stay blank, and the pair is created directly at RM_SUBMITTED so it
+  // routes straight to BH. Existing/in-flight pairs default to true.
+  requireRm       Boolean    @default(true)
   selfToken       String?    @unique @default(cuid())
   selfEmail       String? // captured at launch from Employee.email
   selfName        String? // typically empName — kept for future override
