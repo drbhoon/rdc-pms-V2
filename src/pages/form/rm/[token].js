@@ -197,7 +197,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         {/* Profile card */}
         <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
-        {isOjt && <PriorAnswersPanel stages={priorStages} title="Employee's Responses" />}
+        {priorStages.length > 0 && <PriorAnswersPanel stages={priorStages} title="Employee's Responses" />}
 
         {/* Locked notice */}
         {isLocked && (

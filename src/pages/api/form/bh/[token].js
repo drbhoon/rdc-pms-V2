@@ -37,21 +37,38 @@ export default async function handler(req, res) {
       const questions = (isOjt ? allQuestions.filter((q) => q.audience === 'BH') : allQuestions)
         .map(({ key, label, fieldType, order, options, allowOther }) => ({ key, label, fieldType, order, options: options || null, allowOther }));
 
-      // OJT: Employee + RM answers are shown read-only above the BH's questions.
+      // Earlier stages are shown to the BH read-only, in BOTH flavours.
+      //
+      // OJT: each role answered a different set, so the employee's and the RM's
+      // own questions are listed separately. STANDARD: all three answer the
+      // same set, so only the employee's self-assessment is listed here — the
+      // RM's ratings already arrive pre-filled into the BH's own fields, which
+      // the BH can accept or change, so repeating them read-only would be
+      // confusing rather than helpful.
+      //
+      // Each stage is included only when that stage actually produced answers:
+      // Self is optional (requireSelf) and the RM stage can be skipped entirely
+      // (requireRm), and an empty panel is just noise.
       const selfAnswers = pair.selfAnswers || {};
       const rmAnswers   = pair.rmAnswers   || {};
-      const priorStages = isOjt ? [
-        {
+      const employeeQuestions = isOjt
+        ? allQuestions.filter((q) => q.audience === 'EMPLOYEE')
+        : allQuestions;
+
+      const priorStages = [];
+      if (Object.keys(selfAnswers).length) {
+        priorStages.push({
           label: 'Employee Responses', accent: 'EMPLOYEE',
-          items: allQuestions.filter((q) => q.audience === 'EMPLOYEE')
-            .map((q) => ({ label: q.label, value: selfAnswers[q.key] })),
-        },
-        {
+          items: employeeQuestions.map((q) => ({ label: q.label, value: selfAnswers[q.key] })),
+        });
+      }
+      if (isOjt && Object.keys(rmAnswers).length) {
+        priorStages.push({
           label: 'RM Responses', accent: 'RM',
           items: allQuestions.filter((q) => q.audience === 'RM')
             .map((q) => ({ label: q.label, value: rmAnswers[q.key] })),
-        },
-      ] : [];
+        });
+      }
 
       // Return safe pair fields — include rmAnswers for BH reference, no rmToken
       const safePair = {

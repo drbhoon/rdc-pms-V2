@@ -250,7 +250,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
       <IdentityStrip pair={pair} />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         <ProfileCard profileData={employee?.profileData} />
-        {isOjt && <PriorAnswersPanel stages={priorStages} title="Employee & RM Responses" />}
+        {priorStages.length > 0 && <PriorAnswersPanel stages={priorStages} title="Earlier Responses" />}
 
         {submitted ? (
           <div className="bg-white rounded-2xl border border-green-200 shadow-sm px-8 py-12 text-center">

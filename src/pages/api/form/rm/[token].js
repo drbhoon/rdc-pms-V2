@@ -41,13 +41,24 @@ export default async function handler(req, res) {
       const questions = (isOjt ? allQuestions.filter((q) => q.audience === 'RM') : allQuestions)
         .map(({ key, label, fieldType, order, options, allowOther }) => ({ key, label, fieldType, order, options: options || null, allowOther }));
 
-      // OJT: the employee's answers are shown read-only above the RM's questions.
+      // The employee's self-assessment is shown to the RM read-only — visible,
+      // never editable — in BOTH template flavours.
+      //
+      // OJT: the employee answered a different set, so their own questions are
+      // listed. STANDARD: all three answer the SAME set, so the employee's
+      // answers appear against those same questions, giving the RM the
+      // self-rating to compare against while entering their own.
+      //
+      // Only rendered when a self-assessment actually happened: the stage is
+      // optional (requireSelf), and an empty panel is just noise.
       const selfAnswers = pair.selfAnswers || {};
-      const priorStages = isOjt ? [{
+      const employeeQuestions = isOjt
+        ? allQuestions.filter((q) => q.audience === 'EMPLOYEE')
+        : allQuestions;
+      const priorStages = Object.keys(selfAnswers).length ? [{
         label: 'Employee Responses',
         accent: 'EMPLOYEE',
-        items: allQuestions.filter((q) => q.audience === 'EMPLOYEE')
-          .map((q) => ({ label: q.label, value: selfAnswers[q.key] })),
+        items: employeeQuestions.map((q) => ({ label: q.label, value: selfAnswers[q.key] })),
       }] : [];
 
       // Return safe pair fields — no bhToken
