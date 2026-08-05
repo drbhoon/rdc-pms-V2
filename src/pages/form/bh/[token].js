@@ -7,6 +7,7 @@ import { useState } from 'react';
 import BrandLogo from '../../../components/BrandLogo';
 import PriorAnswersPanel from '../../../components/PriorAnswersPanel';
 import ChoiceField from '../../../components/ChoiceField';
+import { withBase } from '../../../lib/basePath';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -393,7 +394,11 @@ export async function getServerSideProps({ params, req }) {
   const host = process.env.NEXT_PUBLIC_BASE_URL || `http://${req.headers.host}`;
 
   try {
-    const res = await fetch(`${host}/api/form/bh/${token}`);
+  // withBase: this runs on the SERVER, where the window.fetch shim installed by
+  // _app.js does not apply, so the mount prefix has to be added explicitly.
+  // Without it the request goes to hr.rdcc.ai/api/... — the portal — which
+  // returns 404, and every assessment form renders as Not Found.
+    const res = await fetch(`${host}${withBase(`/api/form/bh/${token}`)}`);
     if (res.status === 404) return { notFound: true };
     if (!res.ok) return { notFound: true };
     const data = await res.json();
