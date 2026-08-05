@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import BrandLogo from './BrandLogo';
 import PriorAnswersPanel from './PriorAnswersPanel';
+import { withBase } from '../lib/basePath';
 
 const RATING_LABEL = {
   '1': '1 – Poor', '2': '2 – Below Average', '3': '3 – Average',
@@ -181,7 +182,9 @@ export default function HrCommenterForm({ role, token, data }) {
   const { pair, questions, readonly, priorHr, fields, existing, alreadySubmitted, employee, isOjt, ojtStages } = data;
 
   const router = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const backUrl = router ? router.get('back') : '';
+  // withBase: the ?back= value is an app-relative path written without the
+  // mount prefix, so it must be re-prefixed before being used as a URL.
+  const backUrl = withBase(router ? router.get('back') || '' : '');
 
   const [values, setValues] = useState(() => {
     const seed = {};
@@ -256,7 +259,7 @@ export default function HrCommenterForm({ role, token, data }) {
         {/* HR_SPOC: download report */}
         {role === 'HR_SPOC' && !submitted && (
           <div className="mb-5 flex justify-end">
-            <a href={`/api/form/hr_spoc/report/${token}`}
+            <a href={withBase(`/api/form/hr_spoc/report/${token}`)}
                className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 transition-all">
               <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
               Download Report (.xlsx)
@@ -339,7 +342,9 @@ export function makeHrGetServerSideProps(role) {
     const { token } = params;
     const host = process.env.NEXT_PUBLIC_BASE_URL || `http://${req.headers.host}`;
     try {
-      const res = await fetch(`${host}/api/form/${role.toLowerCase()}/${token}`);
+      // withBase: runs on the SERVER, where the window.fetch shim in _app.js
+      // does not apply, so the mount prefix must be added explicitly.
+      const res = await fetch(`${host}${withBase(`/api/form/${role.toLowerCase()}/${token}`)}`);
       if (!res.ok) return { notFound: true };
       const data = await res.json();
       return { props: { role, token, data } };

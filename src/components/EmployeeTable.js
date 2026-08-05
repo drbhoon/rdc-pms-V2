@@ -5,6 +5,7 @@
  */
 import StatusBadge, { rowColorClass } from './StatusBadge';
 import clsx from 'clsx';
+import { withBase } from '../lib/basePath';
 
 export default function EmployeeTable({ employees, onToggleSelect, loadingPairId }) {
   if (!employees || employees.length === 0) {
@@ -74,7 +75,7 @@ export default function EmployeeTable({ employees, onToggleSelect, loadingPairId
                     {/* RM Form */}
                     {canSelect && isSelected && (
                       <a
-                        href={`/assessment/rm?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}`}
+                        href={withBase(`/assessment/rm?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}`)}
                         className="text-xs px-3 py-1 rounded font-medium bg-blue-600 text-white hover:bg-blue-700"
                       >
                         RM Form
@@ -84,7 +85,7 @@ export default function EmployeeTable({ employees, onToggleSelect, loadingPairId
                     {/* BH Form */}
                     {isRmPending && (
                       <a
-                        href={`/assessment/bh?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}`}
+                        href={withBase(`/assessment/bh?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}`)}
                         className="text-xs px-3 py-1 rounded font-medium bg-green-600 text-white hover:bg-green-700"
                       >
                         BH Form
@@ -94,7 +95,7 @@ export default function EmployeeTable({ employees, onToggleSelect, loadingPairId
                     {/* View finalized */}
                     {isFinalized && (
                       <a
-                        href={`/assessment/bh?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}&view=1`}
+                        href={withBase(`/assessment/bh?roleKey=${encodeURIComponent(emp.ROLE)}&pairId=${encodeURIComponent(emp.ASSESSMENT_PAIR_ID)}&view=1`)}
                         className="text-xs px-3 py-1 rounded font-medium bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
                       >
                         View

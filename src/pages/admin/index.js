@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { getPageAuth } from '../../lib/auth';
+import { withBase } from '../../lib/basePath';
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -355,7 +356,7 @@ export default function DashboardPage({ user }) {
                       <div className="flex items-center gap-2">
                         {p.status === 'FINALIZED' ? (
                           <a
-                            href={`/admin/audit?pairId=${encodeURIComponent(p.pairId || '')}`}
+                            href={withBase(`/admin/audit?pairId=${encodeURIComponent(p.pairId || '')}`)}
                             title="Open Audit log — Super Admin can unlock if needed"
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all"
                           >

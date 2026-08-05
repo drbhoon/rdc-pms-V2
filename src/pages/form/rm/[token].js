@@ -118,7 +118,9 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
   const router = typeof window !== 'undefined'
     ? (new URLSearchParams(window.location.search))
     : null;
-  const backUrl = router ? router.get('back') : '';
+  // withBase: the ?back= value is an app-relative path written without the
+  // mount prefix, so it must be re-prefixed before being used as a URL.
+  const backUrl = withBase(router ? router.get('back') || '' : '');
   const [answers, setAnswers] = useState(
     Object.fromEntries(questions.map((q) => [q.key, '']))
   );

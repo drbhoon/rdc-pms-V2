@@ -130,10 +130,13 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
   const noRm = !isOjt && Object.keys(rmAnswers).length === 0;
 
   // Detect ?back=<dashboard> so we can return the user after submit
-  const backUrl =
+  // withBase: the ?back= value is an app-relative path written without the
+  // mount prefix, so it must be re-prefixed before being used as a URL.
+  const backUrl = withBase(
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('back') || ''
-      : '';
+      : ''
+  );
 
   const [answers, setAnswers] = useState(
     Object.fromEntries(questions.map((q) => [q.key, rmAnswers[q.key] || '']))

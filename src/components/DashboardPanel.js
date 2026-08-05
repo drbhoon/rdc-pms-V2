@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import StatusBadge from './StatusBadge';
 import clsx from 'clsx';
+import { withBase } from '../lib/basePath';
 
 export default function DashboardPanel({ title, items, color, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -73,7 +74,7 @@ export default function DashboardPanel({ title, items, color, defaultOpen = true
                     <td>
                       {row.STATUS === 'Pending RM' && row.SELECTION_FLAG === 'Selected' && (
                         <a
-                          href={`/assessment/rm?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}`}
+                          href={withBase(`/assessment/rm?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}`)}
                           className="text-blue-600 hover:underline text-xs"
                         >
                           RM Form →
@@ -81,7 +82,7 @@ export default function DashboardPanel({ title, items, color, defaultOpen = true
                       )}
                       {row.STATUS === 'Pending BH' && (
                         <a
-                          href={`/assessment/bh?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}`}
+                          href={withBase(`/assessment/bh?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}`)}
                           className="text-green-600 hover:underline text-xs"
                         >
                           BH Form →
@@ -89,7 +90,7 @@ export default function DashboardPanel({ title, items, color, defaultOpen = true
                       )}
                       {row.STATUS === 'Finalized' && (
                         <a
-                          href={`/assessment/bh?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}&view=1`}
+                          href={withBase(`/assessment/bh?roleKey=${row.ROLE}&pairId=${row.ASSESSMENT_PAIR_ID}&view=1`)}
                           className="text-gray-500 hover:underline text-xs"
                         >
                           View →
