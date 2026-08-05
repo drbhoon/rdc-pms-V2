@@ -341,6 +341,7 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
       return c;
     }));
   }, [templateType]);
+
   // V2: HR commenter stages, seeded from any detected HR_*/COTO_* columns.
   const [hrStages, setHrStages] = useState(() =>
     seedHrStagesFromCols(headers.map((h) => ({ header: h, type: classifyHeader(h) })))
@@ -358,6 +359,38 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   const [rmEmailCol, setRmEmailCol] = useState(rmEmailCandidates[0]?.header || '');
   const [bhNameCol,  setBhNameCol]  = useState(bhNameCandidates[0]?.header  || '');
   const [bhEmailCol, setBhEmailCol] = useState(bhEmailCandidates[0]?.header || '');
+
+  // ── Template-type guard ────────────────────────────────────────────────
+  // The type defaults to STANDARD and nothing in the uploaded file changes it,
+  // so a template that is plainly OJT by its columns can be saved as STANDARD
+  // without anything objecting. That has happened twice in practice, and the
+  // symptom appears much later and somewhere else: every question goes to the
+  // employee, and the RM and BH are then asked to answer the trainee's own
+  // questions. Detect the mismatch here, where the decision is actually made.
+  const prefixedQuestionCols = cols.filter((c) => /^(RM|BH)[_\s-]*\d/i.test(c.header));
+
+  let typeWarning = null;
+  if (prefixedQuestionCols.length && templateType !== 'OJT') {
+    typeWarning = {
+      title: 'This looks like an OJT template',
+      body: `The file has ${prefixedQuestionCols.length} numbered RM_/BH_ question column${prefixedQuestionCols.length === 1 ? '' : 's'} (${prefixedQuestionCols.slice(0, 3).map((c) => c.header).join(', ')}${prefixedQuestionCols.length > 3 ? ', …' : ''}), which is how OJT separates each role's questions. Saved as ${templateType}, all of them go to the employee, and the RM and BH are asked the employee's own questions.`,
+    };
+  } else if (templateType === 'OJT' && !prefixedQuestionCols.length) {
+    typeWarning = {
+      title: 'OJT selected, but no reviewer questions found',
+      body: 'OJT expects the RM\'s and BH\'s questions to be prefixed and numbered — RM_1, BH_1 and so on. None were found, so the RM and BH stages would open with nothing to answer.',
+    };
+  } else if (templateType === 'STANDARD' && !bhNameCol && !bhEmailCol) {
+    typeWarning = {
+      title: 'No BH routing columns',
+      body: 'The BH stage is compulsory on a Standard template, but no BH_NAME / BH_EMAIL column is mapped. Launching an assessment against this template will fail.',
+    };
+  }
+
+  // Cleared whenever the type changes, so acknowledging one warning can never
+  // silently carry over to a different, unreviewed one.
+  const [typeWarningAck, setTypeWarningAck] = useState(false);
+  useEffect(() => { setTypeWarningAck(false); }, [templateType]);
 
   // All non-routing columns
   const nonRoutingCols = cols.filter((c) =>
@@ -437,6 +470,14 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
       key: c.header, label: c.header, field_type: c.type,
     }));
 
+    // Mistake-proofing: a mismatch between the chosen type and the shape of the
+    // uploaded file must be acknowledged deliberately, not clicked past.
+    if (typeWarning && !typeWarningAck) {
+      setToast({ message: `${typeWarning.title} — review the template type above, or tick the box to save anyway.`, type: 'error' });
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch('/api/admin/templates', {
@@ -515,6 +556,29 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
               </button>
             ))}
           </div>
+
+          {/* Shown at the point the type is chosen, because the consequence of
+              getting it wrong only appears much later and somewhere else. */}
+          {typeWarning && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+              <div className="flex gap-2">
+                <span aria-hidden="true" className="text-amber-600 leading-none">⚠</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-900">{typeWarning.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800">{typeWarning.body}</p>
+                  <label className="mt-2 flex items-center gap-2 text-xs font-medium text-amber-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={typeWarningAck}
+                      onChange={(e) => setTypeWarningAck(e.target.checked)}
+                      className="rounded border-amber-400"
+                    />
+                    I have checked the template type — save anyway
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
