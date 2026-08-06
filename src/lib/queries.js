@@ -173,18 +173,48 @@ export async function restoreEmployee(empCode, roleKey) {
   ]);
 }
 
+/**
+ * Assessments that are still in flight for this employee — anything not
+ * finalised and not archived. Used to decide whether the employee can be
+ * deleted: erasing someone mid-cycle would invalidate links already sitting in
+ * their reviewers' inboxes.
+ */
+export async function getLiveAssessments(empCode, roleKey) {
+  return prisma.assessmentPair.findMany({
+    where:   { empCode, roleKey, isArchived: false, status: { not: 'FINALIZED' } },
+    select:  { pairId: true, cycle: true, status: true },
+    orderBy: { cycle: 'asc' },
+  });
+}
+
 export async function deleteEmployee(empCode, roleKey) {
-  // Delete in dependency order: audit logs → pairs → employee
+  // Dependency order: HR reviews → audit logs → pairs → employee.
+  //
+  // HrReview was missing here. It carries a foreign key to
+  // AssessmentPair.pairId, so any pair launched under a template with an
+  // active HR-SPOC / HR-HEAD / COTO stage left orphan rows behind and the pair
+  // delete died on a constraint violation — which is all the console showed.
+  // Templates without those stages have no HrReview rows, which is why Delete
+  // appeared to work for some employees and not others.
+  //
+  // One transaction: a failure part-way through would otherwise strip the
+  // audit trail off assessments that then survive.
   const pairs = await prisma.assessmentPair.findMany({
     where:  { empCode, roleKey },
     select: { pairId: true },
   });
   const pairIds = pairs.map((p) => p.pairId);
+
+  const ops = [];
   if (pairIds.length) {
-    await prisma.auditLog.deleteMany({ where: { pairId: { in: pairIds } } });
-    await prisma.assessmentPair.deleteMany({ where: { pairId: { in: pairIds } } });
+    ops.push(prisma.hrReview.deleteMany({ where: { pairId: { in: pairIds } } }));
+    ops.push(prisma.auditLog.deleteMany({ where: { pairId: { in: pairIds } } }));
+    ops.push(prisma.assessmentPair.deleteMany({ where: { pairId: { in: pairIds } } }));
   }
-  return prisma.employee.delete({ where: { empCode_roleKey: { empCode, roleKey } } });
+  ops.push(prisma.employee.delete({ where: { empCode_roleKey: { empCode, roleKey } } }));
+
+  await prisma.$transaction(ops);
+  return { pairsDeleted: pairIds.length };
 }
 
 export async function upsertEmployee(empCode, empName, roleKey, profileData = {}, email = null) {
@@ -637,9 +667,16 @@ export async function submitHrReview(pairId, role, fields, performedBy) {
 }
 
 export async function deletePair(pairId) {
-  // Delete audit logs first (FK constraint), then the pair
-  await prisma.auditLog.deleteMany({ where: { pairId } });
-  return prisma.assessmentPair.delete({ where: { pairId } });
+  // HrReview and AuditLog both hold a foreign key to AssessmentPair.pairId, so
+  // both must go first. HrReview was missed originally: it only has rows when
+  // the template runs a post-BH commenter stage, so Delete failed on those
+  // templates alone. See deleteEmployee for the same fix.
+  const [, , pair] = await prisma.$transaction([
+    prisma.hrReview.deleteMany({ where: { pairId } }),
+    prisma.auditLog.deleteMany({ where: { pairId } }),
+    prisma.assessmentPair.delete({ where: { pairId } }),
+  ]);
+  return pair;
 }
 
 export async function unlockPair(pairId, performedBy) {

@@ -214,6 +214,10 @@ function EmployeeTable({ roles, triggerRoleKey, user }) {
   const [acting, setActing]         = useState(null); // empCode being acted on
   const [toast, setToast]           = useState(null);
 
+  // Delete is offered to every HR admin. The server decides whether it is
+  // allowed, from the employee's own state — an employee with no live
+  // assessment can go; one mid-cycle is refused with a message naming the
+  // cycle. Hiding the button by rank told nobody why it was missing.
   const isSuperAdmin = user?.role === 'HR_SUPER_ADMIN';
 
   useEffect(() => {
@@ -244,7 +248,13 @@ function EmployeeTable({ roles, triggerRoleKey, user }) {
     const warns  = {
       archive: `Archive ${emp.empName} (${emp.empCode})?\n\nThis will hide them from active cycles. Their assessment history is preserved and can be viewed in Reports > Archived.`,
       restore: `Restore ${emp.empName} (${emp.empCode}) to active?`,
-      delete:  `PERMANENTLY DELETE ${emp.empName} (${emp.empCode})?\n\nThis will erase:\n• The employee record\n• ALL their assessment pairs (all cycles)\n• All audit log entries\n\nThis CANNOT be undone. Reports for this employee will no longer be available.`,
+      delete:  `PERMANENTLY DELETE ${emp.empName} (${emp.empCode})?\n\nThis will erase:\n• The employee record\n• ALL their assessment pairs (all cycles)\n• All audit log entries\n\nThis CANNOT be undone. Reports for this employee will no longer be available.` +
+        (isSuperAdmin
+          // Everyone else is stopped by the server if an assessment is live.
+          // A Super Admin is not, so they get the warning the check would have
+          // given them.
+          ? `\n\nAs Super Admin you can delete even a live assessment. Confirm this employee is not mid-cycle.`
+          : ''),
     };
     if (!confirm(warns[action])) return;
 
@@ -381,13 +391,12 @@ function EmployeeTable({ roles, triggerRoleKey, user }) {
                               disabled={busy}
                               className="text-xs font-medium px-2.5 py-1 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-40 transition-all whitespace-nowrap"
                             >{busy ? '…' : 'Restore'}</button>
-                            {isSuperAdmin && (
-                              <button
-                                onClick={() => handleAction('delete', emp)}
-                                disabled={busy}
-                                className="text-xs font-medium px-2.5 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-all whitespace-nowrap"
-                              >{busy ? '…' : 'Delete'}</button>
-                            )}
+                            <button
+                              onClick={() => handleAction('delete', emp)}
+                              disabled={busy}
+                              title="Permanently remove this employee and their assessment history"
+                              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-all whitespace-nowrap"
+                            >{busy ? '…' : 'Delete'}</button>
                           </>
                         ) : (
                           /* ── Active view: Archive + Delete (Super Admin) ── */
@@ -397,13 +406,12 @@ function EmployeeTable({ roles, triggerRoleKey, user }) {
                               disabled={busy}
                               className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition-all whitespace-nowrap"
                             >{busy ? '…' : 'Archive'}</button>
-                            {isSuperAdmin && (
-                              <button
-                                onClick={() => handleAction('delete', emp)}
-                                disabled={busy}
-                                className="text-xs font-medium px-2.5 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-all whitespace-nowrap"
-                              >{busy ? '…' : 'Delete'}</button>
-                            )}
+                            <button
+                              onClick={() => handleAction('delete', emp)}
+                              disabled={busy}
+                              title="Permanently remove this employee — allowed only when no assessment is live"
+                              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-all whitespace-nowrap"
+                            >{busy ? '…' : 'Delete'}</button>
                           </>
                         )}
                       </div>
