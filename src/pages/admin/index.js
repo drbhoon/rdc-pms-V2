@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { getPageAuth } from '../../lib/auth';
-import { withBase } from '../../lib/basePath';
+import { withBase, BASE_PATH } from '../../lib/basePath';
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -237,7 +237,11 @@ export default function DashboardPage({ user }) {
     return () => clearInterval(id);
   }, [loadData]);
 
-  const host = typeof window !== 'undefined' ? window.location.origin : '';
+  // Includes the mount prefix. Every URL built from this is an app path, and
+  // these are copied out for reviewers to open — a missing /parakh sends them
+  // to the portal, which 404s. Email invites are unaffected: they build from
+  // NEXT_PUBLIC_APP_URL, which already carries the prefix.
+  const host = typeof window !== 'undefined' ? window.location.origin + BASE_PATH : '';
 
   return (
     <AdminLayout title="Dashboard" user={user}>
