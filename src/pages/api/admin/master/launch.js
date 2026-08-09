@@ -28,6 +28,34 @@ import { fetchMasterEmployees, byCode, masterConfigured } from '../../../../lib/
 // everything else in the master is either identity or routing.
 const PROFILE_FIELDS = ['designation', 'location', 'city', 'cost_centre', 'company', 'date_of_joining'];
 
+/** "Date of Joining", "date_of_joining" and "DATE-OF-JOINING" all fold together. */
+const foldKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Write master values under the TEMPLATE's column name wherever the two refer
+ * to the same thing.
+ *
+ * Without this the report gets both "Designation" (from the uploaded Excel,
+ * empty because nothing fills it) and "designation" (from the master,
+ * populated) — two columns for one fact, one of them always blank. Template
+ * columns with no counterpart in the master, like Scheme or Stream, are left
+ * alone: they are the editable-at-launch fields, per the rule that anything in
+ * the template but not in the database is entered by hand.
+ */
+function profileForTemplate(employee, role) {
+  const templateKeys = new Map(
+    (Array.isArray(role?.profileCols) ? role.profileCols : [])
+      .map((c) => [foldKey(c.key || c), c.key || c]),
+  );
+  const out = {};
+  for (const field of PROFILE_FIELDS) {
+    const value = employee[field];
+    if (value === null || value === undefined || value === '') continue;
+    out[templateKeys.get(foldKey(field)) || field] = value;
+  }
+  return out;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -114,9 +142,7 @@ export default async function handler(req, res) {
           employee.employee_code,
           employee.employee_name,
           roleKey,
-          Object.fromEntries(
-            PROFILE_FIELDS.map((f) => [f, employee[f] ?? null]).filter(([, v]) => v !== null),
-          ),
+          profileForTemplate(employee, role),
           employee.official_email_id || null,
         );
 
