@@ -22,6 +22,12 @@ export async function launchPair({
   empCode, empName, roleKey, cycle,
   rmName, rmEmail, bhName, bhEmail,
   startOn, selectedBy, role,
+  // HR-SPOC is routed PER EMPLOYEE, like RM and BH — a plant's SPOC differs
+  // from the next plant's. HR-HEAD and COTO are single people for the whole
+  // template, so they stay on the template. Pass {name, email} to override the
+  // template's HR-SPOC for this one pair; the template value remains the
+  // fallback, so templates configured before this still launch unchanged.
+  hrSpocOverride = null,
 }) {
   if (!empCode || !empName || !roleKey || !cycle) {
     throw new LaunchError('empCode, empName, roleKey and cycle are all required.');
@@ -88,7 +94,13 @@ export async function launchPair({
   // launch rather than create pairs that stall after BH with nowhere to go.
   const hasFields = (arr) => Array.isArray(arr) && arr.length > 0;
   const stageConfig = [
-    { key: 'hrSpoc', label: 'HR-SPOC', fields: role.hrSpocFields, email: role.hrSpocEmail, name: role.hrSpocName },
+    {
+      key: 'hrSpoc', label: 'HR-SPOC', fields: role.hrSpocFields,
+      // Per-employee value wins; the template's is the fallback.
+      email: hrSpocOverride?.email || role.hrSpocEmail,
+      name:  hrSpocOverride?.name  || role.hrSpocName,
+      perEmployee: true,
+    },
     { key: 'hrHead', label: 'HR-HEAD', fields: role.hrHeadFields, email: role.hrHeadEmail, name: role.hrHeadName },
     { key: 'coto',   label: 'COTO',    fields: role.cotoFields,   email: role.cotoEmail,   name: role.cotoName   },
   ];
@@ -98,7 +110,9 @@ export async function launchPair({
     const emailSet = !!(s.email && String(s.email).trim());
     if (fieldsDefined && !emailSet) {
       throw new LaunchError(
-        `Template "${roleKey}" defines ${s.label} fields but has no ${s.label} e-mail. Set it in Setup, then launch again.`,
+        s.perEmployee
+          ? `${empName} (${empCode}) has no ${s.label}, and template "${roleKey}" has no fallback ${s.label} either. Pick one for this employee, or set a default in Setup.`
+          : `Template "${roleKey}" defines ${s.label} fields but has no ${s.label} e-mail. Set it in Setup, then launch again.`,
       );
     }
     stages[s.key] = {

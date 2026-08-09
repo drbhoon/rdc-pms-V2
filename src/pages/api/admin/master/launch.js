@@ -98,6 +98,9 @@ export default async function handler(req, res) {
       if (r.empCode) wanted.add(r.empCode);
       if (r.rmCode) wanted.add(r.rmCode);
       if (r.bhCode) wanted.add(r.bhCode);
+      // HR-SPOC is chosen per employee, so it joins the same lookup.
+      // HR-HEAD and COTO are one person per template and come off the role.
+      if (r.hrSpocCode) wanted.add(r.hrSpocCode);
     }
     const master = byCode(await fetchMasterEmployees({ codes: [...wanted] }));
 
@@ -114,7 +117,7 @@ export default async function handler(req, res) {
     // send time, when the pair already exists and nobody is watching.
     const noEmail = [];
     for (const r of rows) {
-      for (const code of [r.rmCode, r.bhCode].filter(Boolean)) {
+      for (const code of [r.rmCode, r.bhCode, r.hrSpocCode].filter(Boolean)) {
         const person = master.get(code);
         if (!person?.official_email_id) noEmail.push(`${person?.employee_name || code} (${code})`);
       }
@@ -133,6 +136,7 @@ export default async function handler(req, res) {
       const employee = master.get(row.empCode);
       const rm = row.rmCode ? master.get(row.rmCode) : null;
       const bh = row.bhCode ? master.get(row.bhCode) : null;
+      const spoc = row.hrSpocCode ? master.get(row.hrSpocCode) : null;
 
       try {
         // The pair's foreign key points at Employee, so the person must exist
@@ -156,6 +160,9 @@ export default async function handler(req, res) {
           bhEmail: bh?.official_email_id || '',
           selectedBy: user.email,
           role,
+          hrSpocOverride: spoc
+            ? { name: spoc.employee_name, email: spoc.official_email_id }
+            : null,
         });
         created.push({ empCode: employee.employee_code, empName: employee.employee_name, pairId: pair.pairId });
       } catch (err) {

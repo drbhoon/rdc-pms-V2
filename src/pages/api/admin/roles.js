@@ -23,6 +23,12 @@ export default async function handler(req, res) {
         rmEmailCol:   r.rmEmailCol || null,
         bhNameCol:    r.bhNameCol  || null,
         bhEmailCol:   r.bhEmailCol || null,
+        // Does this template run an HR-SPOC stage? The launch screen shows a
+        // per-employee HR-SPOC picker only when it does. HR-HEAD and COTO are
+        // one person per template and need no per-row control.
+        hasHrSpocStage: Array.isArray(r.hrSpocFields) && r.hrSpocFields.length > 0,
+        // Fallback used when no HR-SPOC is picked for a row.
+        hrSpocDefaultName: r.hrSpocName || null,
       })),
     });
   } catch (err) {

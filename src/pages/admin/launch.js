@@ -86,6 +86,10 @@ export default function LaunchFromMaster() {
 
   const role = roles.find((r) => r.roleKey === roleKey);
   const isFeedback = role?.templateType === 'FEEDBACK';
+  // HR-SPOC is routed per employee, so it gets a column — but only for
+  // templates that actually run the stage. HR-HEAD and COTO are one person
+  // each for the whole template and stay in Setup.
+  const showSpoc = !isFeedback && Boolean(role?.hasHrSpocStage);
 
   useEffect(() => {
     fetch('/api/admin/roles').then((r) => r.json())
@@ -133,7 +137,7 @@ export default function LaunchFromMaster() {
     setPicked((prev) => {
       const next = { ...prev };
       if (next[code]) delete next[code];
-      else next[code] = { rmCode: '', bhCode: '' };
+      else next[code] = { rmCode: '', bhCode: '', hrSpocCode: '' };
       return next;
     });
   }
@@ -161,6 +165,7 @@ export default function LaunchFromMaster() {
             empCode,
             rmCode: picked[empCode].rmCode || null,
             bhCode: picked[empCode].bhCode || null,
+            hrSpocCode: picked[empCode].hrSpocCode || null,
           })),
         }),
       });
@@ -230,6 +235,7 @@ export default function LaunchFromMaster() {
               ? 'Feedback template — employee-only. No RM or BH is needed; the employee’s own e-mail is used.'
               : `${role.templateType} template. BH is required for every employee; RM is optional and its stage is skipped when left blank.`}
             {role.includeSelf && ' Self-assessment is on, so each employee needs an e-mail on file.'}
+            {showSpoc && ` After BH it goes to HR-SPOC${role.hrSpocDefaultName ? '' : ' — pick one per employee below'}, then HR-HEAD, then COTO.`}
           </p>
         )}
       </div>
@@ -323,8 +329,16 @@ export default function LaunchFromMaster() {
               <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Employee</th>
-                  {!isFeedback && <th className="w-64 px-3 py-2">RM <span className="font-normal normal-case text-slate-400">(optional)</span></th>}
-                  {!isFeedback && <th className="w-64 px-3 py-2">BH <span className="font-normal normal-case text-red-500">required</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">RM <span className="font-normal normal-case text-slate-400">(optional)</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">BH <span className="font-normal normal-case text-red-500">required</span></th>}
+                  {showSpoc && (
+                    <th className="w-56 px-3 py-2">
+                      HR-SPOC{' '}
+                      <span className="font-normal normal-case text-slate-400">
+                        {role?.hrSpocDefaultName ? `(default: ${role.hrSpocDefaultName})` : '(per employee)'}
+                      </span>
+                    </th>
+                  )}
                   <th className="w-10 px-3 py-2"></th>
                 </tr>
               </thead>
@@ -352,6 +366,14 @@ export default function LaunchFromMaster() {
                           <PersonPicker people={people} value={picked[code].bhCode}
                                         onChange={(v) => setReviewer(code, 'bhCode', v)}
                                         placeholder="Type 2+ letters…" ariaLabel={`BH for ${p?.employee_name || code}`} />
+                        </td>
+                      )}
+                      {showSpoc && (
+                        <td className="px-3 py-2">
+                          <PersonPicker people={people} value={picked[code].hrSpocCode}
+                                        onChange={(v) => setReviewer(code, 'hrSpocCode', v)}
+                                        placeholder={role?.hrSpocDefaultName ? 'Leave blank for default' : 'Type 2+ letters…'}
+                                        ariaLabel={`HR-SPOC for ${p?.employee_name || code}`} />
                         </td>
                       )}
                       <td className="px-3 py-2">
