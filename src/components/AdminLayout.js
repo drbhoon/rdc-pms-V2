@@ -24,6 +24,9 @@ const NAV = [
   {
     section: 'Assessments',
     items: [
+      // Sits above Cycle Management because it is now the way a cycle starts:
+      // pick people from the shared master rather than uploading a spreadsheet.
+      { href: '/admin/launch',      label: 'Launch from Master', icon: IconCycle },
       { href: '/admin/assessments', label: 'Cycle Management', icon: IconCycle },
       { href: '/admin/audit',       label: 'Audit & Unlock',   icon: IconAudit },
       { href: '/admin/reports',     label: 'Reports',          icon: IconReports },
