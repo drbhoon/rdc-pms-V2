@@ -54,7 +54,10 @@ function FacetBox({ label, options, selected, onToggle, onClear }) {
         {shown.map((o) => (
           <li key={o}>
             <label className={`flex cursor-pointer items-start gap-2 rounded px-2 py-1 ${selected.includes(o) ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-700'}`}>
-              <input type="checkbox" checked={selected.includes(o)} onChange={() => onToggle(o)} className="mt-0.5" />
+              {/* Explicit name: the wrapping <label> alone left these
+                  announced as bare "on" to assistive tech and to tooling. */}
+              <input type="checkbox" aria-label={`${label}: ${o}`}
+                     checked={selected.includes(o)} onChange={() => onToggle(o)} className="mt-0.5" />
               <span className="leading-snug">{o}</span>
             </label>
           </li>
