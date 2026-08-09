@@ -29,6 +29,13 @@ export default async function handler(req, res) {
         hasHrSpocStage: Array.isArray(r.hrSpocFields) && r.hrSpocFields.length > 0,
         // Fallback used when no HR-SPOC is picked for a row.
         hrSpocDefaultName: r.hrSpocName || null,
+        // The template's profile columns. The launch screen subtracts the ones
+        // the employee master can supply; whatever is left is typed by hand,
+        // per the rule that anything in the template but not in the database is
+        // editable. Identity columns are excluded — they come from the pair.
+        profileCols: (Array.isArray(r.profileCols) ? r.profileCols : [])
+          .filter((c) => (c.field_type || c.fieldType) !== 'identity')
+          .map((c) => ({ key: c.key, label: c.label || c.key })),
       })),
     });
   } catch (err) {

@@ -42,17 +42,33 @@ const foldKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
  * alone: they are the editable-at-launch fields, per the rule that anything in
  * the template but not in the database is entered by hand.
  */
-function profileForTemplate(employee, role) {
-  const templateKeys = new Map(
-    (Array.isArray(role?.profileCols) ? role.profileCols : [])
-      .map((c) => [foldKey(c.key || c), c.key || c]),
-  );
+function profileForTemplate(employee, role, manual = {}) {
+  const cols = Array.isArray(role?.profileCols) ? role.profileCols : [];
+  const templateKeys = new Map(cols.map((c) => [foldKey(c.key || c), c.key || c]));
+
   const out = {};
+  const fromMaster = new Set();
   for (const field of PROFILE_FIELDS) {
     const value = employee[field];
     if (value === null || value === undefined || value === '') continue;
-    out[templateKeys.get(foldKey(field)) || field] = value;
+    const key = templateKeys.get(foldKey(field)) || field;
+    out[key] = value;
+    fromMaster.add(foldKey(key));
   }
+
+  // Hand-entered values fill the template columns the master cannot supply —
+  // Scheme, Stream, and the like. Applied AFTER the master's, and only to keys
+  // the master did not fill, so a stale or edited browser payload can never
+  // overwrite ZingHR data. Keys the template does not declare are dropped.
+  for (const [key, raw] of Object.entries(manual || {})) {
+    const folded = foldKey(key);
+    if (fromMaster.has(folded)) continue;
+    const declared = templateKeys.get(folded);
+    if (!declared) continue;
+    const value = String(raw ?? '').trim().slice(0, 500);
+    if (value) out[declared] = value;
+  }
+
   return out;
 }
 
@@ -146,7 +162,7 @@ export default async function handler(req, res) {
           employee.employee_code,
           employee.employee_name,
           roleKey,
-          profileForTemplate(employee, role),
+          profileForTemplate(employee, role, row.profile),
           employee.official_email_id || null,
         );
 

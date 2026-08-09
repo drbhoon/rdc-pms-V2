@@ -91,6 +91,16 @@ export default function LaunchFromMaster() {
   // each for the whole template and stay in Setup.
   const showSpoc = !isFeedback && Boolean(role?.hasHrSpocStage);
 
+  // Anything the template asks for that ZingHR cannot supply is typed by hand.
+  // The master fills designation, location, city, cost centre, company and
+  // date of joining; whatever else the template declares lands here.
+  const MASTER_SUPPLIED = ['designation', 'location', 'city', 'cost_centre', 'company', 'date_of_joining'];
+  const fold = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const editableFields = useMemo(() => {
+    const supplied = new Set(MASTER_SUPPLIED.map(fold));
+    return (role?.profileCols || []).filter((c) => !supplied.has(fold(c.key)));
+  }, [role]);
+
   useEffect(() => {
     fetch('/api/admin/roles').then((r) => r.json())
       .then((d) => setRoles(d.roles || []))
@@ -137,13 +147,33 @@ export default function LaunchFromMaster() {
     setPicked((prev) => {
       const next = { ...prev };
       if (next[code]) delete next[code];
-      else next[code] = { rmCode: '', bhCode: '', hrSpocCode: '' };
+      else next[code] = { rmCode: '', bhCode: '', hrSpocCode: '', profile: {} };
       return next;
     });
   }
 
   function setReviewer(code, field, personCode) {
     setPicked((prev) => ({ ...prev, [code]: { ...prev[code], [field]: personCode } }));
+  }
+
+  function setProfileField(code, key, value) {
+    setPicked((prev) => ({
+      ...prev,
+      [code]: { ...prev[code], profile: { ...(prev[code].profile || {}), [key]: value } },
+    }));
+  }
+
+  /** Copy one value into every selected row. These fields are usually the same
+   *  for a whole intake — the entire sample sheet is Scheme "GET" — so filling
+   *  25 boxes by hand would be the spreadsheet drudgery this screen replaces. */
+  function applyToAll(key, value) {
+    setPicked((prev) => {
+      const next = { ...prev };
+      for (const code of Object.keys(next)) {
+        next[code] = { ...next[code], profile: { ...(next[code].profile || {}), [key]: value } };
+      }
+      return next;
+    });
   }
 
   const pickedCodes = Object.keys(picked);
@@ -166,6 +196,7 @@ export default function LaunchFromMaster() {
             rmCode: picked[empCode].rmCode || null,
             bhCode: picked[empCode].bhCode || null,
             hrSpocCode: picked[empCode].hrSpocCode || null,
+            profile: picked[empCode].profile || {},
           })),
         }),
       });
@@ -324,6 +355,31 @@ export default function LaunchFromMaster() {
             </button>
           </div>
 
+          {editableFields.length > 0 && (
+            <div className="border-b border-slate-100 bg-amber-50/50 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-700">
+                Fields this template asks for that ZingHR does not hold
+                <span className="ml-2 font-normal text-slate-500">
+                  — type once here to fill every selected row, then correct any exceptions in the table below.
+                </span>
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {editableFields.map((f) => (
+                  <label key={f.key} className="text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">{f.label}</span>
+                    <input
+                      defaultValue=""
+                      onChange={(e) => applyToAll(f.key, e.target.value)}
+                      placeholder={`e.g. for all ${pickedCodes.length}`}
+                      aria-label={`Set ${f.label} for every selected employee`}
+                      className="w-44 rounded-lg border border-slate-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="max-h-96 overflow-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-500">
@@ -339,6 +395,9 @@ export default function LaunchFromMaster() {
                       </span>
                     </th>
                   )}
+                  {editableFields.map((f) => (
+                    <th key={f.key} className="w-40 px-3 py-2 text-amber-800">{f.label}</th>
+                  ))}
                   <th className="w-10 px-3 py-2"></th>
                 </tr>
               </thead>
@@ -376,6 +435,16 @@ export default function LaunchFromMaster() {
                                         ariaLabel={`HR-SPOC for ${p?.employee_name || code}`} />
                         </td>
                       )}
+                      {editableFields.map((f) => (
+                        <td key={f.key} className="px-3 py-2">
+                          <input
+                            value={picked[code].profile?.[f.key] ?? ''}
+                            onChange={(e) => setProfileField(code, f.key, e.target.value)}
+                            aria-label={`${f.label} for ${p?.employee_name || code}`}
+                            className="w-full rounded-lg border border-slate-200 bg-amber-50/40 px-2 py-1.5 text-xs focus:border-blue-500 focus:bg-white focus:outline-none"
+                          />
+                        </td>
+                      ))}
                       <td className="px-3 py-2">
                         <button onClick={() => togglePick(code)} className="text-slate-400 hover:text-red-600" title="Remove">✕</button>
                       </td>
