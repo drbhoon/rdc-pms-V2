@@ -174,6 +174,10 @@ export default async function handler(req, res) {
           roleKey,
           profileForTemplate(employee, role, row.profile),
           employee.official_email_id || null,
+          // Marks the record as owned by the master. Cycle Management will not
+          // offer these for launch, so the same person cannot be started again
+          // there under a different cycle.
+          'hris',
         );
 
         const pair = await launchPair({
@@ -189,6 +193,7 @@ export default async function handler(req, res) {
           hrSpocOverride: spoc
             ? { name: spoc.employee_name, email: spoc.official_email_id }
             : null,
+          viaMaster: true,
         });
         created.push({ empCode: employee.employee_code, empName: employee.employee_name, pairId: pair.pairId });
       } catch (err) {

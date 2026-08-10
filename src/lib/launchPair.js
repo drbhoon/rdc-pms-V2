@@ -28,6 +28,12 @@ export async function launchPair({
   // template's HR-SPOC for this one pair; the template value remains the
   // fallback, so templates configured before this still launch unchanged.
   hrSpocOverride = null,
+  // True only for Launch from Master. Employees the master owns are launched
+  // exclusively from there; Cycle Management works off a plain employee list
+  // per cycle, so the same person becomes launchable again the moment a
+  // different cycle is picked. Blocked here as well as in the screen, because
+  // a stale tab is exactly when this would happen.
+  viaMaster = false,
 }) {
   if (!empCode || !empName || !roleKey || !cycle) {
     throw new LaunchError('empCode, empName, roleKey and cycle are all required.');
@@ -51,6 +57,20 @@ export async function launchPair({
       `${empName} (${empCode}) is already in ${cycle} — ${duplicate.pairId}. `
       + 'Delete that assessment first if you need to start it again.',
     );
+  }
+
+  if (!viaMaster) {
+    const owner = await prisma.employee.findUnique({
+      where:  { empCode_roleKey: { empCode, roleKey } },
+      select: { source: true },
+    });
+    if (owner?.source === 'hris') {
+      throw new LaunchError(
+        `${empName} (${empCode}) comes from the ZingHR employee master and is launched from `
+        + '"Launch from Master", not here. Cycle Management is for third-party and off-roll '
+        + 'staff who are not in ZingHR.',
+      );
+    }
   }
 
   // ── FEEDBACK: employee-only. Self submission finalises the pair. ──────────

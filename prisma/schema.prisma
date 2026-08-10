@@ -58,6 +58,16 @@ model Employee {
   roleKey     String
   email       String? // EMP_EMAIL from Excel — used for self-assessment invites
   profileData Json     @default("{}")
+  // Where this record came from, and therefore which screen owns it.
+  //   'hris'   — pulled from the ZingHR employee master by Launch from Master.
+  //              Cycle Management must NOT offer these: it launches per cycle
+  //              off a plain employee list, so the same person reappears as
+  //              launchable the moment a different cycle is selected.
+  //   'manual' — uploaded on the Employees tab. Third party and off-roll staff
+  //              who are not in ZingHR at all; Cycle Management is their only
+  //              route, so they stay launchable there.
+  // Defaults to 'manual' so every existing upload keeps working untouched.
+  source      String   @default("manual")
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

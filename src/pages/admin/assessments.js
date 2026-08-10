@@ -340,8 +340,19 @@ export default function AssessmentsPage({ user }) {
   // Current role object (includes routing column names)
   const currentRole = roles.find((r) => r.roleKey === roleKey) || null;
 
-  // Employees without a pair yet (eligible for launch)
-  const unlaunchedEmps = employees.filter((e) => !pairMap[e.empCode]);
+  // Employees the ZingHR master owns. They are launched from "Launch from
+  // Master" and must not be offered here: this screen lists employees per
+  // CYCLE, so somebody already assessed in one cycle reappears as launchable
+  // the moment a different cycle is selected — a duplicate the pair-level
+  // check cannot catch, because it is a genuinely different cycle.
+  const masterOwned = employees.filter((e) => e.source === 'hris');
+  const masterOwnedCodes = new Set(masterOwned.map((e) => e.empCode));
+
+  // Employees without a pair yet (eligible for launch). Third-party and
+  // off-roll staff only — they are not in ZingHR, so this is their only route.
+  const unlaunchedEmps = employees.filter(
+    (e) => !pairMap[e.empCode] && !masterOwnedCodes.has(e.empCode),
+  );
 
   // Checkbox helpers
   const allUnlaunchedSelected = unlaunchedEmps.length > 0 &&
@@ -418,7 +429,11 @@ export default function AssessmentsPage({ user }) {
     setBulkLaunching(true);
     setBulkResult(null);
 
-    const targets = employees.filter((e) => selected.has(e.empCode) && !pairMap[e.empCode]);
+    // Master-owned people are excluded here too, not just from the checkbox
+    // list — a selection made before the data refreshed could still hold one.
+    const targets = employees.filter(
+      (e) => selected.has(e.empCode) && !pairMap[e.empCode] && !masterOwnedCodes.has(e.empCode),
+    );
     const isFeedback = currentRole?.templateType === 'FEEDBACK';
     let ok = 0, skipped = 0, noRm = 0;
     const errors = [];
@@ -623,7 +638,10 @@ export default function AssessmentsPage({ user }) {
             {cycle ? `${roleKey} — ${cycle}` : 'Select a role and cycle'}
           </h2>
           <div className="flex items-center gap-3 ml-auto">
-            <span className="text-xs text-slate-400">{employees.length} employees</span>
+            <span className="text-xs text-slate-400">
+              {employees.length} employees
+              {masterOwned.length > 0 && ` · ${masterOwned.length} from ZingHR`}
+            </span>
             {selected.size > 0 && (
               <button
                 onClick={handleBulkLaunch}
@@ -654,6 +672,15 @@ export default function AssessmentsPage({ user }) {
           <div className="px-6 py-12 text-center text-sm text-slate-400">
             No employees found for this role. Add employees in the Employees section first.
           </div>
+        ) : unlaunchedEmps.length === 0 && masterOwned.length > 0 && pairs.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-500">
+            All {masterOwned.length} employees for this template come from the ZingHR master.
+            <br />
+            <a href="/admin/launch" className="text-blue-600 underline hover:text-blue-800">
+              Launch them from the Employee Master
+            </a>
+            {' '}— this screen is for third-party and off-roll staff who are not in ZingHR.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -674,7 +701,10 @@ export default function AssessmentsPage({ user }) {
               <tbody className="divide-y divide-slate-100">
                 {employees.map((emp) => {
                   const pair    = pairMap[emp.empCode];
-                  const canSelect = !pair;
+                  // Still listed, so their progress is visible here alongside
+                  // everyone else's — only the launch controls are withheld.
+                  const fromMaster = masterOwnedCodes.has(emp.empCode);
+                  const canSelect = !pair && !fromMaster;
                   const isSelected = selected.has(emp.empCode);
 
                   return (
@@ -706,7 +736,13 @@ export default function AssessmentsPage({ user }) {
                         })()}
                       </td>
                       <td className="px-4 py-3 space-x-2 flex items-center">
-                        {!pair ? (
+                        {!pair && fromMaster ? (
+                          <a href="/admin/launch"
+                             className="text-xs text-slate-500 underline hover:text-slate-800"
+                             title="This employee comes from the ZingHR master and is launched there">
+                            Launch from Master
+                          </a>
+                        ) : !pair ? (
                           <button onClick={() => setLaunchTarget(emp)}
                             className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-all"
                             title="Edit routing info before launching">

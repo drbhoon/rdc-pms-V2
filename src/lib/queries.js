@@ -217,11 +217,21 @@ export async function deleteEmployee(empCode, roleKey) {
   return { pairsDeleted: pairIds.length };
 }
 
-export async function upsertEmployee(empCode, empName, roleKey, profileData = {}, email = null) {
+/**
+ * @param {string|null} source 'hris' when the record came from the ZingHR
+ *   employee master, 'manual' for an Employees-tab upload. Pass null to leave
+ *   an existing record's source alone — re-uploading a spreadsheet should not
+ *   quietly reclassify somebody the master owns.
+ */
+export async function upsertEmployee(empCode, empName, roleKey, profileData = {}, email = null, source = null) {
   return prisma.employee.upsert({
     where:  { empCode_roleKey: { empCode, roleKey } },
-    update: { empName, profileData, ...(email !== undefined ? { email } : {}) },
-    create: { empCode, empName, roleKey, profileData, email },
+    update: {
+      empName, profileData,
+      ...(email !== undefined ? { email } : {}),
+      ...(source ? { source } : {}),
+    },
+    create: { empCode, empName, roleKey, profileData, email, source: source || 'manual' },
   });
 }
 
