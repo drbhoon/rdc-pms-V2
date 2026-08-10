@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import PersonPicker from '../../components/PersonPicker';
 import { getPageAuth } from '../../lib/auth';
+import { editableProfileCols } from '../../lib/masterProfile';
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -92,14 +93,13 @@ export default function LaunchFromMaster() {
   const showSpoc = !isFeedback && Boolean(role?.hasHrSpocStage);
 
   // Anything the template asks for that ZingHR cannot supply is typed by hand.
-  // The master fills designation, location, city, cost centre, company and
-  // date of joining; whatever else the template declares lands here.
-  const MASTER_SUPPLIED = ['designation', 'location', 'city', 'cost_centre', 'company', 'date_of_joining'];
-  const fold = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const editableFields = useMemo(() => {
-    const supplied = new Set(MASTER_SUPPLIED.map(fold));
-    return (role?.profileCols || []).filter((c) => !supplied.has(fold(c.key)));
-  }, [role]);
+  // Which columns those are is decided by lib/masterProfile, shared with the
+  // launch API — two copies of that answer would drift, and HR would end up
+  // typing into a box the server then overwrites.
+  const editableFields = useMemo(
+    () => editableProfileCols(role?.profileCols || []),
+    [role],
+  );
 
   useEffect(() => {
     fetch('/api/admin/roles').then((r) => r.json())

@@ -22,51 +22,40 @@ import { requireAuth } from '../../../../lib/auth';
 import { getRole, upsertEmployee, appendAudit } from '../../../../lib/queries';
 import { launchPair, LaunchError } from '../../../../lib/launchPair';
 import { fetchMasterEmployees, byCode, masterConfigured } from '../../../../lib/master';
-
-// Profile fields copied from the master onto the PARAKH employee record, so
-// the assessment forms can show who this person is. Deliberately a fixed list:
-// everything else in the master is either identity or routing.
-const PROFILE_FIELDS = ['designation', 'location', 'city', 'cost_centre', 'company', 'date_of_joining'];
-
-/** "Date of Joining", "date_of_joining" and "DATE-OF-JOINING" all fold together. */
-const foldKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+import { foldKey, masterCoverage, MASTER_PROFILE_FIELDS } from '../../../../lib/masterProfile';
 
 /**
  * Write master values under the TEMPLATE's column name wherever the two refer
- * to the same thing.
+ * to the same thing — including known aliases, so "Plant Location" is filled
+ * from the master's `location` rather than retyped on every launch.
  *
  * Without this the report gets both "Designation" (from the uploaded Excel,
  * empty because nothing fills it) and "designation" (from the master,
- * populated) — two columns for one fact, one of them always blank. Template
- * columns with no counterpart in the master, like Scheme or Stream, are left
- * alone: they are the editable-at-launch fields, per the rule that anything in
- * the template but not in the database is entered by hand.
+ * populated) — two columns for one fact, one of them always blank.
  */
 function profileForTemplate(employee, role, manual = {}) {
   const cols = Array.isArray(role?.profileCols) ? role.profileCols : [];
-  const templateKeys = new Map(cols.map((c) => [foldKey(c.key || c), c.key || c]));
+  const { byField, coveredFolded } = masterCoverage(cols);
+  const declared = new Map(cols.map((c) => [foldKey(c?.key ?? c), c?.key ?? c]));
 
   const out = {};
-  const fromMaster = new Set();
-  for (const field of PROFILE_FIELDS) {
+  for (const field of MASTER_PROFILE_FIELDS) {
     const value = employee[field];
     if (value === null || value === undefined || value === '') continue;
-    const key = templateKeys.get(foldKey(field)) || field;
-    out[key] = value;
-    fromMaster.add(foldKey(key));
+    out[byField.get(field)] = value;
   }
 
   // Hand-entered values fill the template columns the master cannot supply —
-  // Scheme, Stream, and the like. Applied AFTER the master's, and only to keys
-  // the master did not fill, so a stale or edited browser payload can never
-  // overwrite ZingHR data. Keys the template does not declare are dropped.
+  // Scheme, Qualification, and the like. Applied only to keys the master does
+  // NOT cover, so a stale or edited browser payload can never overwrite ZingHR
+  // data. Keys the template never declared are dropped.
   for (const [key, raw] of Object.entries(manual || {})) {
     const folded = foldKey(key);
-    if (fromMaster.has(folded)) continue;
-    const declared = templateKeys.get(folded);
-    if (!declared) continue;
+    if (coveredFolded.has(folded)) continue;
+    const target = declared.get(folded);
+    if (!target) continue;
     const value = String(raw ?? '').trim().slice(0, 500);
-    if (value) out[declared] = value;
+    if (value) out[target] = value;
   }
 
   return out;
