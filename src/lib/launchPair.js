@@ -34,6 +34,25 @@ export async function launchPair({
   }
   if (!role) throw new LaunchError(`No template found for role "${roleKey}".`);
 
+  // Nobody twice in the same cycle. createPair would otherwise make a second
+  // pair with its own tokens and its own invite, silently, because it just
+  // increments the sequence — the reviewer gets two identical-looking requests
+  // and the report shows the employee twice.
+  //
+  // This lives HERE rather than only in the batch endpoint because there are
+  // two doors into a launch: Launch from Master, and Cycle Management's older
+  // employee-list path. A guard on one door is not a guard.
+  const duplicate = await prisma.assessmentPair.findFirst({
+    where: { empCode, roleKey, cycle },
+    select: { pairId: true, status: true },
+  });
+  if (duplicate) {
+    throw new LaunchError(
+      `${empName} (${empCode}) is already in ${cycle} — ${duplicate.pairId}. `
+      + 'Delete that assessment first if you need to start it again.',
+    );
+  }
+
   // ── FEEDBACK: employee-only. Self submission finalises the pair. ──────────
   if (role.templateType === 'FEEDBACK') {
     const employee = await prisma.employee.findUnique({
