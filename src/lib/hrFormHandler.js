@@ -159,7 +159,9 @@ export function makeHrFormHandler(role) {
           });
           ojtStages = [
             stageFor('EMPLOYEE', 'Employee Responses', sa),
-            stageFor('RM', 'RM Responses', ra),
+            // First arg is the internal role and must stay 'RM'; only the
+            // label shown to the commenter changes.
+            stageFor('RM', 'Level 1 Responses', ra),
             stageFor('BH', 'BH Responses', ba),
           ].filter((s) => s.items.length > 0);
         }

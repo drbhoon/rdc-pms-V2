@@ -207,7 +207,7 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
             <p className="text-xs text-indigo-800 leading-relaxed">
               {isFeedback
                 ? 'Please answer the questions below honestly. Once you submit, your response is recorded — there are no further steps.'
-                : 'Please rate yourself honestly against the questions below. Your answers will be visible to your Reporting Manager and Branch Head when they complete their reviews. Once you submit, your RM will be notified automatically.'}
+                : 'Please rate yourself honestly against the questions below. Your answers will be visible to your Level 1 and Level 2 reviewers when they complete their reviews. Once you submit, your Level 1 reviewer will be notified automatically.'}
             </p>
           </div>
         )}
@@ -240,7 +240,7 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
             <p className="text-slate-500 text-sm">
               {isFeedback
                 ? 'Thank you for your feedback. Your response has been recorded.'
-                : 'Thank you. Your Reporting Manager has been notified and will complete their review.'}
+                : 'Thank you. Your Level 1 reviewer has been notified and will complete their review.'}
               {backUrl ? ' Returning…' : ' You may close this window.'}
             </p>
             {backUrl && (

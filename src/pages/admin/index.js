@@ -11,9 +11,9 @@ import { withBase, BASE_PATH } from '../../lib/basePath';
 function StatusBadge({ status }) {
   const map = {
     PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    PENDING_BH:        { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_RM:        { label: 'Awaiting Level 1', cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting Level 2', cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_BH:        { label: 'Awaiting Level 2', cls: 'bg-purple-100 text-purple-700 border-purple-200' },
     BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
     HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
     HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
@@ -308,8 +308,8 @@ export default function DashboardPage({ user }) {
           <>
             <StatCard label="Total Selected"  value={stats?.total ?? stats?.totalSelected} borderColor="border-l-blue-500"   textColor="text-blue-600"   />
             <StatCard label="Awaiting Self"   value={stats?.pendingSelf}   borderColor="border-l-indigo-500" textColor="text-indigo-600" />
-            <StatCard label="Awaiting RM"     value={stats?.pendingRm}     borderColor="border-l-orange-500" textColor="text-orange-600" />
-            <StatCard label="Awaiting BH"     value={stats?.rmSubmitted}   borderColor="border-l-purple-500" textColor="text-purple-600" />
+            <StatCard label="Awaiting Level 1" value={stats?.pendingRm}   borderColor="border-l-orange-500" textColor="text-orange-600" />
+            <StatCard label="Awaiting Level 2" value={stats?.rmSubmitted} borderColor="border-l-purple-500" textColor="text-purple-600" />
             <StatCard label="Awaiting HR-SPOC" value={stats?.awaitingHrSpoc} borderColor="border-l-teal-500"   textColor="text-teal-600"   />
             <StatCard label="Awaiting HR-HEAD" value={stats?.awaitingHrHead} borderColor="border-l-violet-500" textColor="text-violet-600" />
             <StatCard label="Awaiting COTO"   value={stats?.awaitingCoto}  borderColor="border-l-rose-500"   textColor="text-rose-600"   />
@@ -336,7 +336,7 @@ export default function DashboardPage({ user }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Emp Code', 'Name', 'RM', 'BH', 'Status', 'Last Updated', 'Action'].map((h) => (
+                  {['Emp Code', 'Name', 'Level 1', 'Level 2', 'Status', 'Last Updated', 'Action'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -372,10 +372,10 @@ export default function DashboardPage({ user }) {
                         ) : (
                           <>
                             {p.rmToken && p.status === 'PENDING_RM' && (
-                              <CopyButton text={`${host}/form/rm/${p.rmToken}`} label="RM Link" />
+                              <CopyButton text={`${host}/form/rm/${p.rmToken}`} label="Level 1 Link" />
                             )}
                             {p.bhToken && p.status === 'RM_SUBMITTED' && (
-                              <CopyButton text={`${host}/form/bh/${p.bhToken}`} label="BH Link" />
+                              <CopyButton text={`${host}/form/bh/${p.bhToken}`} label="Level 2 Link" />
                             )}
                             {p.rmToken && p.status !== 'PENDING_RM' && p.status !== 'RM_SUBMITTED' && (
                               <span className="text-xs text-slate-300">—</span>

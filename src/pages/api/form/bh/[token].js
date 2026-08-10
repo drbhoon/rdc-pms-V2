@@ -64,7 +64,8 @@ export default async function handler(req, res) {
       }
       if (isOjt && Object.keys(rmAnswers).length) {
         priorStages.push({
-          label: 'RM Responses', accent: 'RM',
+          // Label is what the reviewer reads; accent is the internal role key.
+          label: 'Level 1 Responses', accent: 'RM',
           items: allQuestions.filter((q) => q.audience === 'RM')
             .map((q) => ({ label: q.label, value: rmAnswers[q.key] })),
         });

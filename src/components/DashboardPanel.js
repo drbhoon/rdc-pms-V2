@@ -53,8 +53,8 @@ export default function DashboardPanel({ title, items, color, defaultOpen = true
                   <th>Cycle</th>
                   <th>Pair ID</th>
                   <th>Status</th>
-                  <th>RM</th>
-                  <th>BH</th>
+                  <th>Level 1</th>
+                  <th>Level 2</th>
                   <th>Updated</th>
                   <th>Action</th>
                 </tr>

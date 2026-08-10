@@ -26,8 +26,8 @@ export default function EmployeeTable({ employees, onToggleSelect, loadingPairId
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Emp Code</th>
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Name</th>
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Cycle</th>
-            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">RM</th>
-            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">BH</th>
+            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Level 1</th>
+            <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Level 2</th>
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Status</th>
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Selected By</th>
             <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-2.5">Action</th>

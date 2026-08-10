@@ -19,6 +19,7 @@
  * lib/launchPair used by the single-pair endpoint.
  */
 import { requireAuth } from '../../../../lib/auth';
+import { prisma } from '../../../../lib/db';
 import { getRole, upsertEmployee, appendAudit } from '../../../../lib/queries';
 import { launchPair, LaunchError } from '../../../../lib/launchPair';
 import { fetchMasterEmployees, byCode, masterConfigured } from '../../../../lib/master';
@@ -95,6 +96,26 @@ export default async function handler(req, res) {
                + 'No appraisal can run without a BH.',
         });
       }
+    }
+
+    // Refuse anyone already in this cycle. createPair happily makes a second
+    // pair with its own tokens and its own invite — silently, because it just
+    // increments the sequence number. That was survivable when employees came
+    // from a curated upload of the exact cohort; picking from 900-odd people
+    // across several sittings, it is a matter of time. Checked on the server
+    // and not only in the screen, because the screen can be stale.
+    const already = await prisma.assessmentPair.findMany({
+      where: { roleKey, cycle, empCode: { in: rows.map((r) => r.empCode).filter(Boolean) } },
+      select: { empCode: true, empName: true },
+    });
+    if (already.length) {
+      const names = already.map((p) => `${p.empName} (${p.empCode})`);
+      return res.status(409).json({
+        error: `Already in ${cycle}: ${names.slice(0, 5).join(', ')}`
+             + `${names.length > 5 ? ` and ${names.length - 5} more` : ''}. `
+             + 'Remove them from the selection, or use a different cycle.',
+        alreadyLaunched: already.map((p) => p.empCode),
+      });
     }
 
     // One round trip for everybody involved — employees and their reviewers.

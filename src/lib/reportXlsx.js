@@ -65,9 +65,9 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
   }
 
   const headers = [
-    'Sr No', 'Emp Code', 'Employee Name', 'RM Name', 'BH Name',
+    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name',
     ...profileHeaders,
-    'RM Email', 'BH Email', 'Status', 'Reviewer',
+    'Level 1 Email', 'Level 2 Email', 'Status', 'Reviewer',
     ...questions.map((q) => q.label),
     'Submitted On',
     ...hrHeaders,
@@ -120,9 +120,9 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
     if (r.requireSelf) {
       dataRows.push([...ident, 'SELF', ...selfAns, fmtDate(r.selfSubmittedOn), ...hrBlank]);
     }
-    dataRows.push([...ident, 'RM', ...rmAns, fmtDate(r.rmSubmittedOn), ...hrBlank]);
-    // BH row carries the HR commenter values at the end.
-    dataRows.push([...ident, 'BH', ...bhAns, fmtDate(r.bhSubmittedOn), ...hrValuesFor(r)]);
+    dataRows.push([...ident, 'Level 1', ...rmAns, fmtDate(r.rmSubmittedOn), ...hrBlank]);
+    // Level 2 row carries the HR commenter values at the end.
+    dataRows.push([...ident, 'Level 2', ...bhAns, fmtDate(r.bhSubmittedOn), ...hrValuesFor(r)]);
   });
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
@@ -133,8 +133,8 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
     if (lower === 'reviewer') return { wch: 10 };
     if (lower === 'emp code') return { wch: 12 };
     if (lower === 'status') return { wch: 16 };
-    if (lower === 'employee name' || lower === 'rm name' || lower === 'bh name') return { wch: 24 };
-    if (lower === 'rm email' || lower === 'bh email') return { wch: 28 };
+    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name') return { wch: 24 };
+    if (lower === 'level 1 email' || lower === 'level 2 email') return { wch: 28 };
     if (lower === 'submitted on') return { wch: 20 };
     if (lower.startsWith('hr-spoc:') || lower.startsWith('hr-head:') || lower.startsWith('coto:')) return { wch: 28 };
     return { wch: 30 };
@@ -160,13 +160,13 @@ function buildOjtWorkbook({ questions, profileCols, profileHeaders, rows, hrHead
   const bhQ  = questions.filter((q) => questionAudience(q) === 'BH');
 
   const headers = [
-    'Sr No', 'Emp Code', 'Employee Name', 'RM Name', 'BH Name',
+    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name',
     ...profileHeaders,
-    'RM Email', 'BH Email', 'Status',
+    'Level 1 Email', 'Level 2 Email', 'Status',
     ...empQ.map((q) => `Employee: ${q.label}`),
     ...rmQ.map((q) => `RM: ${q.label}`),
     ...bhQ.map((q) => `BH: ${q.label}`),
-    'Self Submitted', 'RM Submitted', 'BH Submitted',
+    'Self Submitted', 'Level 1 Submitted', 'Level 2 Submitted',
     ...hrHeaders,
   ];
 
@@ -198,8 +198,8 @@ function buildOjtWorkbook({ questions, profileCols, profileHeaders, rows, hrHead
     if (lower === 'sr no') return { wch: 6 };
     if (lower === 'emp code') return { wch: 12 };
     if (lower === 'status') return { wch: 16 };
-    if (lower === 'employee name' || lower === 'rm name' || lower === 'bh name') return { wch: 24 };
-    if (lower === 'rm email' || lower === 'bh email') return { wch: 28 };
+    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name') return { wch: 24 };
+    if (lower === 'level 1 email' || lower === 'level 2 email') return { wch: 28 };
     if (lower.endsWith('submitted')) return { wch: 20 };
     return { wch: 30 };
   });

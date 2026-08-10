@@ -48,13 +48,15 @@ function classifyHeader(header) {
   if (/^HR[_\s-]?HEAD[_\s-]/i.test(raw)) return 'hr_head';
   if (/^COTO[_\s-]/i.test(raw))          return 'coto';
 
-  // ── Routing: reviewer (RM / BM / Reporting Manager)
-  if (/^(RM|BM)_/i.test(raw)) {
+  // ── Routing: first reviewer. Level 1 is the name used everywhere HR reads;
+  // RM/BM are kept so the twenty templates written before the rename still
+  // classify, and L1_/LEVEL1_ accepted so new ones can use the new wording.
+  if (/^(RM|BM|L1|LEVEL[_\s-]?1)_/i.test(raw)) {
     if (/name/i.test(raw))            return 'rm_name';
     if (/e?mail/i.test(raw))          return 'rm_email';  // handles typo BM_Emai
   }
-  // ── Routing: approver (BH / Batch Head / Branch Head)
-  if (/^BH_/i.test(raw)) {
+  // ── Routing: second reviewer (Level 2 — formerly BH / Batch or Branch Head)
+  if (/^(BH|L2|LEVEL[_\s-]?2)_/i.test(raw)) {
     if (/name/i.test(raw))            return 'bh_name';
     if (/e?mail/i.test(raw))          return 'bh_email';
   }
@@ -335,7 +337,7 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
     setCols((prev) => prev.map((c) => {
       const isRouting = ['rm_name', 'rm_email', 'bh_name', 'bh_email'].includes(c.type);
       const isQuestion = QUESTION_TYPES.includes(c.type);
-      if (!isRouting && !isQuestion && /^(RM|BH)[_\s-]*\d/i.test(c.header)) {
+      if (!isRouting && !isQuestion && /^(RM|BH|L1|L2|LEVEL[_\s-]?[12])[_\s-]*\d/i.test(c.header)) {
         return { ...c, type: 'choice', options: [...DEFAULT_CHOICES] };
       }
       return c;
@@ -367,7 +369,7 @@ function ReviewPanel({ filename, headers, onCreated, onBack }) {
   // symptom appears much later and somewhere else: every question goes to the
   // employee, and the RM and BH are then asked to answer the trainee's own
   // questions. Detect the mismatch here, where the decision is actually made.
-  const prefixedQuestionCols = cols.filter((c) => /^(RM|BH)[_\s-]*\d/i.test(c.header));
+  const prefixedQuestionCols = cols.filter((c) => /^(RM|BH|L1|L2|LEVEL[_\s-]?[12])[_\s-]*\d/i.test(c.header));
 
   let typeWarning = null;
   if (prefixedQuestionCols.length && templateType !== 'OJT') {

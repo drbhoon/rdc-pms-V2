@@ -180,7 +180,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
           <BrandLogo />
           <div>
             <div className="font-bold text-base leading-tight tracking-tight">RDC PMS</div>
-            <div className="text-xs text-slate-400 leading-tight">RM Assessment Form</div>
+            <div className="text-xs text-slate-400 leading-tight">Level 1 Assessment Form</div>
           </div>
         </div>
       </header>
@@ -210,7 +210,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
             </svg>
             <div>
               <div className="font-semibold mb-0.5">Already submitted</div>
-              <div className="text-amber-700 text-xs">This RM assessment has already been submitted. The form is now read-only.</div>
+              <div className="text-amber-700 text-xs">This Level 1 assessment has already been submitted. The form is now read-only.</div>
             </div>
           </div>
         )}
@@ -225,7 +225,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">Assessment submitted successfully.</h2>
             <p className="text-slate-500 text-sm">
-              Thank you for completing the RM assessment.
+              Thank you for completing the Level 1 assessment.
               {backUrl ? ' Returning to your dashboard…' : ' You may close this window.'}
             </p>
             {backUrl && (
@@ -292,7 +292,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
                     Submitting…
                   </span>
                 ) : (
-                  'Submit RM Assessment'
+                  'Submit Level 1 Assessment'
                 )}
               </button>
             )}

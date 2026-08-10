@@ -16,8 +16,12 @@
 // Derive the audience of a question from its key/header prefix.
 export function audienceForKey(key) {
   const k = String(key || '').trim();
-  if (/^RM[_\s-]*\d/i.test(k)) return 'RM';
-  if (/^BH[_\s-]*\d/i.test(k)) return 'BH';
+  // L1_/L2_ are the wording HR now sees; RM_/BH_ still classify so the
+  // templates written before the rename keep working untouched. The returned
+  // audience stays 'RM'/'BH' — that is the internal role, stored on questions
+  // and matched all over the form and report code.
+  if (/^(RM|L1|LEVEL[_\s-]?1)[_\s-]*\d/i.test(k)) return 'RM';
+  if (/^(BH|L2|LEVEL[_\s-]?2)[_\s-]*\d/i.test(k)) return 'BH';
   return 'EMPLOYEE';
 }
 
@@ -35,7 +39,7 @@ export function isReservedColumnKey(key) {
   const k = String(key || '').trim();
   if (/^__EMPTY/i.test(k)) return true;                          // xlsx blank header
   if (/^\s*\d+[.)]\s/.test(k)) return true;                      // "1. ..." numbered question
-  if (/^(RM|BH|BM)[_\s-]*\d/i.test(k)) return true;              // OJT RM_1 / BH_2 questions
+  if (/^(RM|BH|BM|L1|L2|LEVEL[_\s-]?[12])[_\s-]*\d/i.test(k)) return true; // OJT L1_1 / L2_2 (or legacy RM_1 / BH_2) questions
   if (/^(HR[_\s-]*SPOC|HR[_\s-]*HEAD|COTO)[_\s-]/i.test(k)) return true; // HR commenter questions
   return false;
 }

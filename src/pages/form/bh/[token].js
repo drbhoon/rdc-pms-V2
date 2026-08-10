@@ -201,8 +201,8 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-amber-800 mb-1">RM has not yet submitted</h2>
-            <p className="text-sm text-amber-700">The Reporting Manager has not completed their assessment yet. Please check back later.</p>
+            <h2 className="text-lg font-bold text-amber-800 mb-1">Level 1 has not yet submitted</h2>
+            <p className="text-sm text-amber-700">The Level 1 reviewer has not completed their assessment yet. Please check back later.</p>
           </div>
         </main>
         <BhFooter />
@@ -267,7 +267,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
             <p className="text-slate-500 text-sm">
               {backUrl
                 ? 'Returning to your dashboard…'
-                : 'Thank you for completing the BH assessment. You may close this window.'}
+                : 'Thank you for completing the Level 2 assessment. You may close this window.'}
             </p>
             {backUrl && (
               <a
@@ -282,13 +282,13 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100">
-                <h2 className="text-sm font-semibold text-slate-700">BH Assessment Questions</h2>
+                <h2 className="text-sm font-semibold text-slate-700">Level 2 Assessment Questions</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {isOjt
-                    ? 'Answer your BH questions below. Employee and RM responses are shown above for reference.'
+                    ? 'Answer your Level 2 questions below. Employee and Level 1 responses are shown above for reference.'
                     : noRm
-                      ? 'No Reporting Manager is assigned for this employee — please complete the full assessment.'
-                      : 'Pre-filled with RM answers. Review and adjust as needed.'}
+                      ? 'No Level 1 reviewer is assigned for this employee — please complete the full assessment.'
+                      : 'Pre-filled with Level 1 answers. Review and adjust as needed.'}
                 </p>
               </div>
               <div className="divide-y divide-slate-100">
@@ -341,7 +341,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
                   Submitting…
                 </span>
               ) : (
-                'Submit BH Assessment & Finalise'
+                'Submit Level 2 Assessment & Finalise'
               )}
             </button>
           </form>
@@ -361,7 +361,7 @@ function BhHeader() {
         <BrandLogo />
         <div>
           <div className="font-bold text-base leading-tight tracking-tight">RDC PARAKH</div>
-          <div className="text-xs text-slate-400 leading-tight">BH Assessment Form</div>
+          <div className="text-xs text-slate-400 leading-tight">Level 2 Assessment Form</div>
         </div>
       </div>
     </header>

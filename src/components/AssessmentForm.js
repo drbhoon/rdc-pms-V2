@@ -267,8 +267,8 @@ export default function AssessmentForm({ formType, rm, bh, headers, onSubmit, is
               {submitting
                 ? 'Submitting…'
                 : isBH
-                ? 'Submit BH Assessment & Finalize'
-                : 'Submit RM Assessment'}
+                ? 'Submit Level 2 Assessment & Finalise'
+                : 'Submit Level 1 Assessment'}
             </button>
           ) : (
             <span className="text-sm text-gray-500 italic">Submitted and locked.</span>

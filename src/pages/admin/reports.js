@@ -12,8 +12,8 @@ import { getPageAuth } from '../../lib/auth';
 function StatusBadge({ status }) {
   const map = {
     PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_RM:        { label: 'Awaiting Level 1', cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting Level 2', cls: 'bg-purple-100 text-purple-700 border-purple-200' },
     BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
     HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
     HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
@@ -202,8 +202,8 @@ export default function ReportsPage({ user }) {
             ? [
                 { label: 'Total',         value: summary.total,     cls: 'text-slate-700'  },
                 { label: 'Awaiting Self', value: summary.self,      cls: 'text-indigo-600' },
-                { label: 'Awaiting RM',   value: summary.pending,   cls: 'text-orange-600' },
-                { label: 'Awaiting BH',   value: summary.submitted, cls: 'text-purple-600' },
+                { label: 'Awaiting Level 1', value: summary.pending,   cls: 'text-orange-600' },
+                { label: 'Awaiting Level 2', value: summary.submitted, cls: 'text-purple-600' },
                 { label: 'Finalised',     value: summary.finalized, cls: 'text-green-600'  },
               ]
             : [

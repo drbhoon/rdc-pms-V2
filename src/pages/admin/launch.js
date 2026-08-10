@@ -73,6 +73,12 @@ export default function LaunchFromMaster() {
   const [roleKey, setRoleKey] = useState('');
   const [cycle, setCycle] = useState('');
   const [startOn, setStartOn] = useState('');
+  // Existing cycles for the chosen template, and who is already in the chosen
+  // one. A cycle is not a stored record — it is DISTINCT cycle across pairs —
+  // so "the cycles that exist" only ever means "the ones with pairs in them".
+  const [cycleList, setCycleList] = useState([]);
+  const [newCycle, setNewCycle] = useState(false);
+  const [alreadyIn, setAlreadyIn] = useState(new Set());
 
   const [people, setPeople] = useState([]);
   const [loadError, setLoadError] = useState('');
@@ -106,6 +112,35 @@ export default function LaunchFromMaster() {
       .then((d) => setRoles(d.roles || []))
       .catch(() => setToast({ message: 'Could not load templates.', type: 'error' }));
   }, []);
+
+  // Cycles belong to a template, so the list changes with it. Reset the chosen
+  // cycle too — carrying "FY26-H1" across to a different template would offer
+  // a cycle that has nothing to do with it.
+  useEffect(() => {
+    setCycle('');
+    setNewCycle(false);
+    setAlreadyIn(new Set());
+    if (!roleKey) { setCycleList([]); return; }
+    fetch(`/api/admin/cycles?roleKey=${encodeURIComponent(roleKey)}`)
+      .then((r) => r.json())
+      .then((d) => setCycleList(d.cycles || []))
+      .catch(() => setCycleList([]));
+  }, [roleKey]);
+
+  // Who is already in the chosen cycle. Launching them again would create a
+  // second pair with its own invite, and nothing would say so.
+  useEffect(() => {
+    if (!roleKey || !cycle.trim()) { setAlreadyIn(new Set()); return; }
+    let cancelled = false;
+    fetch(`/api/admin/pairs?roleKey=${encodeURIComponent(roleKey)}&cycle=${encodeURIComponent(cycle.trim())}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setAlreadyIn(new Set((d.pairs || []).map((p) => p.empCode)));
+      })
+      .catch(() => { if (!cancelled) setAlreadyIn(new Set()); });
+    return () => { cancelled = true; };
+  }, [roleKey, cycle]);
 
   useEffect(() => {
     fetch('/api/admin/master/employees?picker=1')
@@ -251,8 +286,34 @@ export default function LaunchFromMaster() {
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-slate-700">Cycle</span>
-            <input value={cycle} onChange={(e) => setCycle(e.target.value)} placeholder="e.g. FY26-H1"
-                   className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            {newCycle || cycleList.length === 0 ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={cycle} onChange={(e) => setCycle(e.target.value)}
+                  placeholder="e.g. FY26-H1" autoFocus={newCycle}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                {cycleList.length > 0 && (
+                  <button type="button" onClick={() => { setNewCycle(false); setCycle(''); }}
+                          className="text-xs text-slate-500 underline hover:text-slate-800">
+                    pick existing
+                  </button>
+                )}
+              </div>
+            ) : (
+              <select
+                value={cycle}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') { setNewCycle(true); setCycle(''); }
+                  else setCycle(e.target.value);
+                }}
+                className="min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Choose a cycle…</option>
+                {cycleList.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">＋ New cycle…</option>
+              </select>
+            )}
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-slate-700">Start on <span className="font-normal text-slate-400">(optional)</span></span>
@@ -264,7 +325,7 @@ export default function LaunchFromMaster() {
           <p className="mt-3 text-xs text-slate-500">
             {isFeedback
               ? 'Feedback template — employee-only. No RM or BH is needed; the employee’s own e-mail is used.'
-              : `${role.templateType} template. BH is required for every employee; RM is optional and its stage is skipped when left blank.`}
+              : `${role.templateType} template. Level 2 is required for every employee; Level 1 is optional and its stage is skipped when left blank.`}
             {role.includeSelf && ' Self-assessment is on, so each employee needs an e-mail on file.'}
             {showSpoc && ` After BH it goes to HR-SPOC${role.hrSpocDefaultName ? '' : ' — pick one per employee below'}, then HR-HEAD, then COTO.`}
           </p>
@@ -286,6 +347,11 @@ export default function LaunchFromMaster() {
             </label>
             <p className="text-sm text-slate-600">
               {loading ? 'Loading the master…' : <><strong>{filtered.length}</strong> of {people.length} shown</>}
+              {alreadyIn.size > 0 && (
+                <span className="ml-2 text-slate-500">
+                  · {alreadyIn.size} already in {cycle}
+                </span>
+              )}
             </p>
           </div>
 
@@ -314,19 +380,33 @@ export default function LaunchFromMaster() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.slice(0, 400).map((p) => (
-                  <tr key={p.employee_code} className={picked[p.employee_code] ? 'bg-blue-50' : 'hover:bg-slate-50'}>
-                    <td className="px-3 py-1.5">
-                      <input type="checkbox" checked={Boolean(picked[p.employee_code])}
-                             onChange={() => togglePick(p.employee_code)}
-                             aria-label={`Select ${p.employee_name}`} />
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">{p.employee_code}</td>
-                    <td className="px-3 py-1.5 font-medium text-slate-800">{p.employee_name}</td>
-                    <td className="px-3 py-1.5 text-slate-600">{p.designation || '—'}</td>
-                    <td className="px-3 py-1.5 text-slate-600">{p.location || '—'}</td>
-                  </tr>
-                ))}
+                {filtered.slice(0, 400).map((p) => {
+                  const done = alreadyIn.has(p.employee_code);
+                  return (
+                    <tr key={p.employee_code}
+                        className={done ? 'bg-slate-50 text-slate-400'
+                                        : picked[p.employee_code] ? 'bg-blue-50' : 'hover:bg-slate-50'}>
+                      <td className="px-3 py-1.5">
+                        <input type="checkbox" disabled={done}
+                               checked={Boolean(picked[p.employee_code])}
+                               onChange={() => togglePick(p.employee_code)}
+                               aria-label={done ? `${p.employee_name} is already in this cycle`
+                                                : `Select ${p.employee_name}`} />
+                      </td>
+                      <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">{p.employee_code}</td>
+                      <td className="px-3 py-1.5 font-medium">
+                        {p.employee_name}
+                        {done && (
+                          <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            already in {cycle}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5">{p.designation || '—'}</td>
+                      <td className="px-3 py-1.5">{p.location || '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {filtered.length > 400 && (
@@ -346,7 +426,7 @@ export default function LaunchFromMaster() {
               Selected — {pickedCodes.length} {pickedCodes.length === 1 ? 'employee' : 'employees'}
               {!isFeedback && missingBh.length > 0 && (
                 <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                  {missingBh.length} still without a BH
+                  {missingBh.length} still without a Level 2
                 </span>
               )}
             </h2>
@@ -385,8 +465,8 @@ export default function LaunchFromMaster() {
               <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Employee</th>
-                  {!isFeedback && <th className="w-56 px-3 py-2">RM <span className="font-normal normal-case text-slate-400">(optional)</span></th>}
-                  {!isFeedback && <th className="w-56 px-3 py-2">BH <span className="font-normal normal-case text-red-500">required</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">Level 1 <span className="font-normal normal-case text-slate-400">(optional)</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">Level 2 <span className="font-normal normal-case text-red-500">required</span></th>}
                   {showSpoc && (
                     <th className="w-56 px-3 py-2">
                       HR-SPOC{' '}
@@ -417,14 +497,14 @@ export default function LaunchFromMaster() {
                         <td className="px-3 py-2">
                           <PersonPicker people={people} value={picked[code].rmCode}
                                         onChange={(v) => setReviewer(code, 'rmCode', v)}
-                                        placeholder="Type 2+ letters…" ariaLabel={`RM for ${p?.employee_name || code}`} />
+                                        placeholder="Type 2+ letters…" ariaLabel={`Level 1 for ${p?.employee_name || code}`} />
                         </td>
                       )}
                       {!isFeedback && (
                         <td className="px-3 py-2">
                           <PersonPicker people={people} value={picked[code].bhCode}
                                         onChange={(v) => setReviewer(code, 'bhCode', v)}
-                                        placeholder="Type 2+ letters…" ariaLabel={`BH for ${p?.employee_name || code}`} />
+                                        placeholder="Type 2+ letters…" ariaLabel={`Level 2 for ${p?.employee_name || code}`} />
                         </td>
                       )}
                       {showSpoc && (
@@ -459,7 +539,7 @@ export default function LaunchFromMaster() {
             <p className="text-xs text-slate-500">
               {!roleKey ? 'Choose a template first.'
                 : !cycle.trim() ? 'Give the cycle a name.'
-                : missingBh.length > 0 ? `${missingBh.length} employee${missingBh.length === 1 ? '' : 's'} still need a BH — no appraisal can run without one.`
+                : missingBh.length > 0 ? `${missingBh.length} employee${missingBh.length === 1 ? '' : 's'} still need a Level 2 reviewer — no appraisal can run without one.`
                 : 'Ready. Reviewers are e-mailed on the next invite run, not immediately.'}
             </p>
             <button

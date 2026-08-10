@@ -11,9 +11,9 @@ import { BASE_PATH } from '../../lib/basePath';
 function StatusBadge({ status }) {
   const map = {
     PENDING_SELF:      { label: 'Awaiting Self',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-    PENDING_RM:        { label: 'Awaiting RM',      cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    RM_SUBMITTED:      { label: 'Awaiting BH',      cls: 'bg-purple-100 text-purple-700 border-purple-200' },
-    PENDING_BH:        { label: 'Awaiting BH',      cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+    PENDING_RM:        { label: 'Awaiting Level 1', cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    RM_SUBMITTED:      { label: 'Awaiting Level 2', cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    PENDING_BH:        { label: 'Awaiting Level 2', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
     BH_SUBMITTED:      { label: 'Awaiting HR-SPOC', cls: 'bg-teal-100   text-teal-700   border-teal-200'   },
     HR_SPOC_SUBMITTED: { label: 'Awaiting HR-HEAD', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
     HR_HEAD_SUBMITTED: { label: 'Awaiting COTO',    cls: 'bg-rose-100   text-rose-700   border-rose-200'   },
@@ -36,9 +36,9 @@ function currentLink(pair, host) {
     case 'PENDING_SELF':
       return pair.selfToken ? { label: 'Self Link', url: `${host}/form/self/${pair.selfToken}` } : null;
     case 'PENDING_RM':
-      return pair.rmToken ? { label: 'RM Link', url: `${host}/form/rm/${pair.rmToken}` } : null;
+      return pair.rmToken ? { label: 'Level 1 Link', url: `${host}/form/rm/${pair.rmToken}` } : null;
     case 'RM_SUBMITTED':
-      return pair.bhToken ? { label: 'BH Link', url: `${host}/form/bh/${pair.bhToken}` } : null;
+      return pair.bhToken ? { label: 'Level 2 Link', url: `${host}/form/bh/${pair.bhToken}` } : null;
     case 'BH_SUBMITTED':
       return pair.hrSpoc?.token ? { label: 'HR-SPOC Link', url: `${host}/form/hr_spoc/${pair.hrSpoc.token}` } : null;
     case 'HR_SPOC_SUBMITTED':
@@ -98,7 +98,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
       // BH is mandatory. RM is optional — if left blank, the RM stage is skipped
       // and the assessment routes straight to BH with blank RM ratings.
       if (!form.bhName || !form.bhEmail) {
-        return setError('Business Head name and email are required.');
+        return setError('Level 2 reviewer name and email are required.');
       }
       if ((form.rmName && !form.rmEmail) || (!form.rmName && form.rmEmail)) {
         return setError('Enter both RM name and email, or leave both blank to route straight to BH.');
@@ -173,7 +173,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
           {!isFeedback && (
           <>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Reporting Manager <span className="normal-case font-normal text-slate-400">(optional — leave blank to route straight to BH)</span>
+            Level 1 reviewer <span className="normal-case font-normal text-slate-400">(optional — leave blank to route straight to Level 2)</span>
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -211,7 +211,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
           </div>
           {!isFeedback && (
           <>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Business Head</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Level 2 reviewer</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-600 mb-1">

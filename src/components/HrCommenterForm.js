@@ -91,8 +91,8 @@ function CandidatePanel({ questions, readonly }) {
                 <th className="px-4 py-2 text-left font-semibold text-slate-500">#</th>
                 <th className="px-4 py-2 text-left font-semibold text-slate-500">Question</th>
                 {showSelf && <th className="px-4 py-2 text-left font-semibold text-indigo-600">Self</th>}
-                <th className="px-4 py-2 text-left font-semibold text-blue-600">RM</th>
-                <th className="px-4 py-2 text-left font-semibold text-green-600">BH</th>
+                <th className="px-4 py-2 text-left font-semibold text-blue-600">Level 1</th>
+                <th className="px-4 py-2 text-left font-semibold text-green-600">Level 2</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
