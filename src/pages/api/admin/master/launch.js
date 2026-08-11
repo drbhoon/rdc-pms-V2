@@ -22,6 +22,7 @@ import { requireAuth } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/db';
 import { getRole, upsertEmployee, appendAudit } from '../../../../lib/queries';
 import { launchPair, LaunchError } from '../../../../lib/launchPair';
+import { runInvitesWithTimeout } from '../../../../lib/invites';
 import { fetchMasterEmployees, byCode, masterConfigured } from '../../../../lib/master';
 import { foldKey, masterCoverage, MASTER_PROFILE_FIELDS } from '../../../../lib/masterProfile';
 
@@ -212,11 +213,33 @@ export default async function handler(req, res) {
       details: { requested: rows.length, created: created.length, failed: failed.length },
     });
 
+    // Send the invites now rather than waiting for the next cron tick. HR's
+    // expectation when they press Launch is that reviewers are told; having to
+    // visit Cycle Management and press "Send Invites Now" afterwards is a step
+    // with no purpose. Capped at 12s so a slow SMTP server cannot hang the
+    // request — anything unsent is picked up by the next cron run, because
+    // runInvites only ever acts on pairs not yet stamped as invited.
+    //
+    // Pairs with a future startOn are skipped by runInvites itself, so a
+    // scheduled launch still waits for its date.
+    let invited = null;
+    if (created.length) {
+      try {
+        invited = await runInvitesWithTimeout(12000);
+      } catch (err) {
+        // A failed send must not fail the launch: the assessments exist and
+        // are correct, and the cron will retry.
+        console.error('[master/launch] runInvites failed:', err.message);
+        invited = { error: err.message };
+      }
+    }
+
     return res.status(created.length ? 201 : 400).json({
       created: created.length,
       failed: failed.length,
       createdRows: created,
       failedRows: failed,
+      invited,
     });
   } catch (err) {
     console.error('[master/launch]', err);

@@ -217,7 +217,10 @@ export default function LaunchFromMaster() {
 
   async function launch() {
     if (!canLaunch) return;
-    if (!confirm(`Launch ${pickedCodes.length} assessment${pickedCodes.length === 1 ? '' : 's'} for ${cycle.trim()}?\n\nReviewers will be e-mailed on the next invite run.`)) return;
+    const when = startOn
+      ? `Reviewers will be e-mailed on or after ${startOn}.`
+      : 'Reviewers will be e-mailed now.';
+    if (!confirm(`Launch ${pickedCodes.length} assessment${pickedCodes.length === 1 ? '' : 's'} for ${cycle.trim()}?\n\n${when}`)) return;
     setLaunching(true);
     setResult(null);
     try {
@@ -247,8 +250,16 @@ export default function LaunchFromMaster() {
           return next;
         });
       }
+      // Report what actually reached a reviewer, not just what was created —
+      // "3 launched" with no e-mail sent is the thing HR needs to notice.
+      const inv = data.invited || {};
+      const mailed = (inv.selfGroupsEmailed || 0) + (inv.rmGroupsEmailed || 0) + (inv.bhGroupsEmailed || 0);
+      const mailNote = startOn ? ` — invites scheduled for ${startOn}`
+                     : inv.timedOut ? ' — e-mails still sending, they will finish shortly'
+                     : mailed ? ` — ${mailed} reviewer e-mail${mailed === 1 ? '' : 's'} sent`
+                     : '';
       setToast({
-        message: `${data.created} launched${data.failed ? `, ${data.failed} failed` : ''}.`,
+        message: `${data.created} launched${data.failed ? `, ${data.failed} failed` : ''}${mailNote}.`,
         type: data.failed ? 'error' : 'success',
       });
     } catch (err) {
@@ -540,7 +551,9 @@ export default function LaunchFromMaster() {
               {!roleKey ? 'Choose a template first.'
                 : !cycle.trim() ? 'Give the cycle a name.'
                 : missingBh.length > 0 ? `${missingBh.length} employee${missingBh.length === 1 ? '' : 's'} still need a Level 2 reviewer — no appraisal can run without one.`
-                : 'Ready. Reviewers are e-mailed on the next invite run, not immediately.'}
+                : startOn
+                  ? `Ready. Reviewers will be e-mailed on or after ${startOn}.`
+                  : 'Ready. Reviewers are e-mailed as soon as you launch.'}
             </p>
             <button
               onClick={launch}
