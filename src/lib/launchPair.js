@@ -18,10 +18,39 @@ export class LaunchError extends Error {}
  * @param {object} input.role  the RoleTemplate, already loaded by the caller
  * @returns {Promise<object>} the created pair
  */
+/**
+ * Turn the date picker's "YYYY-MM-DD" into the instant that day BEGINS in
+ * India, and drop it entirely once that instant has passed.
+ *
+ * Prisma coerces a bare "2026-08-13" to midnight UTC, which is 05:30 in
+ * Kolkata. The invite query asks for startOn <= now, so choosing TODAY made
+ * the pair ineligible until half past five in the morning — HR picked today,
+ * pressed Launch, and nothing was sent. "Today" has to mean "now".
+ *
+ * Returning null rather than a past timestamp also puts the pair on the
+ * unscheduled path, so the screen says "e-mailed now" and means it.
+ */
+export function normaliseStartOn(startOn) {
+  if (!startOn) return null;
+  if (startOn instanceof Date) return startOn <= new Date() ? null : startOn;
+
+  const text = String(startOn).trim();
+  if (!text) return null;
+
+  // Date-only input from <input type="date">. Anything else (a full ISO
+  // timestamp) already carries its own offset and is left alone.
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00+05:30`)
+    : new Date(text);
+
+  if (Number.isNaN(when.getTime())) return null;   // unparseable ⇒ send now
+  return when <= new Date() ? null : when;
+}
+
 export async function launchPair({
   empCode, empName, roleKey, cycle,
   rmName, rmEmail, bhName, bhEmail,
-  startOn, selectedBy, role,
+  startOn: rawStartOn, selectedBy, role,
   // HR-SPOC is routed PER EMPLOYEE, like RM and BH — a plant's SPOC differs
   // from the next plant's. HR-HEAD and COTO are single people for the whole
   // template, so they stay on the template. Pass {name, email} to override the
@@ -38,6 +67,10 @@ export async function launchPair({
   if (!empCode || !empName || !roleKey || !cycle) {
     throw new LaunchError('empCode, empName, roleKey and cycle are all required.');
   }
+
+  // Done once, here, so both the batch and single-pair paths get it — and so a
+  // date that has already arrived becomes a plain immediate launch.
+  const startOn = normaliseStartOn(rawStartOn);
   if (!role) throw new LaunchError(`No template found for role "${roleKey}".`);
 
   // Nobody twice in the same cycle. createPair would otherwise make a second

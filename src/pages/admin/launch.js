@@ -215,9 +215,16 @@ export default function LaunchFromMaster() {
   const missingBh = isFeedback ? [] : pickedCodes.filter((c) => !picked[c].bhCode);
   const canLaunch = roleKey && cycle.trim() && pickedCodes.length > 0 && missingBh.length === 0 && !launching;
 
+  // A date of today or earlier is not a schedule — the server treats it as an
+  // immediate launch, and the screen has to say the same thing. Promising
+  // "on or after today" while sending straight away is how HR ends up waiting
+  // for an e-mail that already went.
+  const todayStr = new Date().toLocaleDateString('en-CA');   // YYYY-MM-DD, local
+  const scheduled = Boolean(startOn) && startOn > todayStr;
+
   async function launch() {
     if (!canLaunch) return;
-    const when = startOn
+    const when = scheduled
       ? `Reviewers will be e-mailed on or after ${startOn}.`
       : 'Reviewers will be e-mailed now.';
     if (!confirm(`Launch ${pickedCodes.length} assessment${pickedCodes.length === 1 ? '' : 's'} for ${cycle.trim()}?\n\n${when}`)) return;
@@ -254,10 +261,15 @@ export default function LaunchFromMaster() {
       // "3 launched" with no e-mail sent is the thing HR needs to notice.
       const inv = data.invited || {};
       const mailed = (inv.selfGroupsEmailed || 0) + (inv.rmGroupsEmailed || 0) + (inv.bhGroupsEmailed || 0);
-      const mailNote = startOn ? ` — invites scheduled for ${startOn}`
+      const mailNote = scheduled ? ` — invites scheduled for ${startOn}`
                      : inv.timedOut ? ' — e-mails still sending, they will finish shortly'
+                     : inv.error ? ` — but the e-mails FAILED: ${inv.error}`
                      : mailed ? ` — ${mailed} reviewer e-mail${mailed === 1 ? '' : 's'} sent`
-                     : '';
+                     // Launched, not scheduled, nothing sent and no error: the
+                     // reviewers were already invited, or something filtered
+                     // them out. Silence here is what sent HR to Cycle
+                     // Management in the first place.
+                     : ' — no e-mail was sent; check Cycle Management';
       setToast({
         message: `${data.created} launched${data.failed ? `, ${data.failed} failed` : ''}${mailNote}.`,
         type: data.failed ? 'error' : 'success',
@@ -551,7 +563,7 @@ export default function LaunchFromMaster() {
               {!roleKey ? 'Choose a template first.'
                 : !cycle.trim() ? 'Give the cycle a name.'
                 : missingBh.length > 0 ? `${missingBh.length} employee${missingBh.length === 1 ? '' : 's'} still need a Level 2 reviewer — no appraisal can run without one.`
-                : startOn
+                : scheduled
                   ? `Ready. Reviewers will be e-mailed on or after ${startOn}.`
                   : 'Ready. Reviewers are e-mailed as soon as you launch.'}
             </p>

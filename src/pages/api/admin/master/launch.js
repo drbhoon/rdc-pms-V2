@@ -226,6 +226,12 @@ export default async function handler(req, res) {
     if (created.length) {
       try {
         invited = await runInvitesWithTimeout(12000);
+        // Always logged, success or not. When HR reports "no e-mail arrived"
+        // this is the only record of whether anything was even attempted, and
+        // runInvites reports its own per-recipient failures in errors[]
+        // without throwing — so a silent partial failure looks identical to
+        // success from the outside.
+        console.log('[master/launch] invites:', JSON.stringify(invited));
       } catch (err) {
         // A failed send must not fail the launch: the assessments exist and
         // are correct, and the cron will retry.
