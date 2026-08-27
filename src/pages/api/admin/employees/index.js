@@ -1,9 +1,11 @@
 /**
- * GET /api/admin/employees?roleKey=X          → active employees
- * GET /api/admin/employees?roleKey=X&archived=1 → archived employees
+ * GET /api/admin/employees?roleKey=X                    → active employees (full roster, all cycles)
+ * GET /api/admin/employees?roleKey=X&archived=1          → archived employees
+ * GET /api/admin/employees?roleKey=X&cycle=Y             → Cycle Management view: only
+ *   people tagged to cycle Y, plus anyone with a pair already in cycle Y
  */
 import { requireAuth } from '../../../../lib/auth';
-import { getEmployeesByRole, getArchivedEmployees } from '../../../../lib/queries';
+import { getEmployeesByRole, getArchivedEmployees, getEmployeesForCycleManagement } from '../../../../lib/queries';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -11,13 +13,15 @@ export default async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  const { roleKey, archived } = req.query;
+  const { roleKey, archived, cycle } = req.query;
   if (!roleKey) return res.status(400).json({ error: 'roleKey is required' });
 
   try {
     const employees = archived === '1'
       ? await getArchivedEmployees(roleKey)
-      : await getEmployeesByRole(roleKey);
+      : cycle
+        ? await getEmployeesForCycleManagement(roleKey, cycle)
+        : await getEmployeesByRole(roleKey);
     return res.status(200).json({ employees });
   } catch (err) {
     console.error('[employees/index]', err);

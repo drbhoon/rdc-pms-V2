@@ -140,6 +140,29 @@ export async function getEmployeesByRole(roleKey) {
   });
 }
 
+/**
+ * Employees Cycle Management should offer for one specific cycle: people
+ * tagged to this cycle (uploaded for it, so they're launch candidates) OR
+ * people who already have a pair in this cycle (so a cycle you launched
+ * before this field existed, or one someone revisits later, still shows its
+ * existing progress). A person tagged to a DIFFERENT cycle who has no pair
+ * here is excluded — that's the fix: cycles no longer accumulate every past
+ * upload forever.
+ */
+export async function getEmployeesForCycleManagement(roleKey, cycle) {
+  return prisma.employee.findMany({
+    where: {
+      roleKey,
+      isActive: true,
+      OR: [
+        { cycle },
+        { pairs: { some: { roleKey, cycle } } },
+      ],
+    },
+    orderBy: { empCode: 'asc' },
+  });
+}
+
 export async function getArchivedEmployees(roleKey) {
   return prisma.employee.findMany({
     where:   { roleKey, isActive: false },
@@ -223,20 +246,23 @@ export async function deleteEmployee(empCode, roleKey) {
  *   an existing record's source alone — re-uploading a spreadsheet should not
  *   quietly reclassify somebody the master owns.
  */
-export async function upsertEmployee(empCode, empName, roleKey, profileData = {}, email = null, source = null) {
+export async function upsertEmployee(empCode, empName, roleKey, profileData = {}, email = null, source = null, cycle = undefined) {
   return prisma.employee.upsert({
     where:  { empCode_roleKey: { empCode, roleKey } },
     update: {
       empName, profileData,
       ...(email !== undefined ? { email } : {}),
       ...(source ? { source } : {}),
+      ...(cycle !== undefined ? { cycle } : {}),
     },
-    create: { empCode, empName, roleKey, profileData, email, source: source || 'manual' },
+    create: { empCode, empName, roleKey, profileData, email, source: source || 'manual', cycle: cycle || null },
   });
 }
 
 export async function bulkUpsertEmployees(rows) {
-  // rows: [{ empCode, empName, roleKey, profileData, email? }]
+  // rows: [{ empCode, empName, roleKey, profileData, email?, cycle? }]
+  // Retags cycle on every re-upload — a person re-added for a later cycle
+  // becomes a candidate for that cycle, not the one they were first added to.
   return prisma.$transaction(rows.map((r) =>
     prisma.employee.upsert({
       where:  { empCode_roleKey: { empCode: r.empCode, roleKey: r.roleKey } },
@@ -244,6 +270,7 @@ export async function bulkUpsertEmployees(rows) {
         empName: r.empName,
         profileData: r.profileData,
         ...(r.email !== undefined ? { email: r.email } : {}),
+        ...(r.cycle !== undefined ? { cycle: r.cycle } : {}),
       },
       create: r,
     })

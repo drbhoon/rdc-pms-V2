@@ -312,7 +312,7 @@ export default function AssessmentsPage({ user }) {
     setBulkResult(null);
     const qs = `roleKey=${encodeURIComponent(roleKey)}&cycle=${encodeURIComponent(cycle)}`;
     Promise.all([
-      fetch(`/api/admin/employees?roleKey=${encodeURIComponent(roleKey)}`).then((r) => r.json()),
+      fetch(`/api/admin/employees?${qs}`).then((r) => r.json()),
       fetch(`/api/admin/pairs?${qs}`).then((r) => r.json()),
     ])
       .then(([empData, pairData]) => {

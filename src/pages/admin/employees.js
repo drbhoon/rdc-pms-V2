@@ -37,9 +37,26 @@ function UploadSection({ roles, onUploaded }) {
   const [toast, setToast]         = useState(null);
   const fileRef = useRef();
 
+  // Cycle this upload belongs to. Cycle Management only offers people tagged
+  // to the cycle it's currently showing — without this, every past upload for
+  // the role would keep resurfacing as launchable in every new cycle forever.
+  const [cycle, setCycle]         = useState('');
+  const [cycleList, setCycleList] = useState([]);
+  const [newCycle, setNewCycle]   = useState(false);
+
   useEffect(() => {
     if (roles.length && !roleKey) setRoleKey(roles[0].roleKey);
   }, [roles, roleKey]);
+
+  useEffect(() => {
+    setCycle('');
+    setNewCycle(false);
+    if (!roleKey) { setCycleList([]); return; }
+    fetch(`/api/admin/cycles?roleKey=${encodeURIComponent(roleKey)}`)
+      .then((r) => r.json())
+      .then((d) => setCycleList(d.cycles || []))
+      .catch(() => setCycleList([]));
+  }, [roleKey]);
 
   function parseFile(file) {
     const reader = new FileReader();
@@ -76,6 +93,7 @@ function UploadSection({ roles, onUploaded }) {
 
   async function handleUpload() {
     if (!roleKey) return setToast({ message: 'Please select a role.', type: 'error' });
+    if (!cycle.trim()) return setToast({ message: 'Please choose or name the cycle this upload is for.', type: 'error' });
     if (!rows.length) return setToast({ message: 'Please upload an Excel file first.', type: 'error' });
     setUploading(true);
     setResult(null);
@@ -83,7 +101,7 @@ function UploadSection({ roles, onUploaded }) {
       const res = await fetch('/api/admin/employees/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleKey, rows }),
+        body: JSON.stringify({ roleKey, cycle: cycle.trim(), rows }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -114,6 +132,41 @@ function UploadSection({ roles, onUploaded }) {
               <option key={r.roleKey} value={r.roleKey}>{r.roleLabel || r.roleKey}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Cycle <span className="text-red-500">*</span>
+            <span className="ml-1 font-normal text-slate-400">— this batch is added to this cycle only, not carried into future ones</span>
+          </label>
+          {newCycle || cycleList.length === 0 ? (
+            <div className="flex items-center gap-2">
+              <input
+                value={cycle} onChange={(e) => setCycle(e.target.value)}
+                placeholder="e.g. RQLDP Phase 4 - Round 1" autoFocus={newCycle}
+                className="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              {cycleList.length > 0 && (
+                <button type="button" onClick={() => { setNewCycle(false); setCycle(''); }}
+                        className="text-xs text-slate-500 underline hover:text-slate-800 whitespace-nowrap">
+                  pick existing
+                </button>
+              )}
+            </div>
+          ) : (
+            <select
+              value={cycle}
+              onChange={(e) => {
+                if (e.target.value === '__new__') { setNewCycle(true); setCycle(''); }
+                else setCycle(e.target.value);
+              }}
+              className="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">Choose a cycle…</option>
+              {cycleList.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="__new__">＋ New cycle…</option>
+            </select>
+          )}
         </div>
 
         {/* Drop zone */}
@@ -193,7 +246,7 @@ function UploadSection({ roles, onUploaded }) {
 
         <button
           onClick={handleUpload}
-          disabled={uploading || !rows.length}
+          disabled={uploading || !rows.length || !cycle.trim()}
           className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
         >
           {uploading ? 'Uploading…' : 'Upload Employees'}

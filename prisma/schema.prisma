@@ -57,6 +57,15 @@ model Employee {
   empName     String
   roleKey     String
   email       String? // EMP_EMAIL from Excel — used for self-assessment invites
+  // Cycle this row was last uploaded for. Retagged on every re-upload of the
+  // same empCode. Cycle Management's launch candidates are filtered to an
+  // exact match on this field — a cycle is a fresh, explicit selection of
+  // people, not a persistent roster that resurfaces in every later cycle.
+  // Null on rows uploaded before this field existed; those never match a
+  // cycle filter, so they simply stop appearing as launch candidates (their
+  // pair history in whichever cycle they were actually launched in is
+  // unaffected — see getEmployeesForCycleManagement).
+  cycle       String?
   profileData Json     @default("{}")
   // Where this record came from, and therefore which screen owns it.
   //   'hris'   — pulled from the ZingHR employee master by Launch from Master.

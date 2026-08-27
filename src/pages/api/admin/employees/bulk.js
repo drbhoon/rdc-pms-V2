@@ -40,8 +40,9 @@ export default async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  const { roleKey, rows } = req.body || {};
+  const { roleKey, cycle, rows } = req.body || {};
   if (!roleKey) return res.status(400).json({ error: 'roleKey is required' });
+  if (!cycle || !String(cycle).trim()) return res.status(400).json({ error: 'cycle is required' });
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'rows must be a non-empty array' });
   }
@@ -119,6 +120,7 @@ export default async function handler(req, res) {
           empCode,
           empName,
           roleKey,
+          cycle: String(cycle).trim(),
           profileData,
           email: empEmail ? empEmail.toLowerCase() : null,
         };
