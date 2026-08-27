@@ -340,6 +340,9 @@ export default function AssessmentsPage({ user }) {
   // Current role object (includes routing column names)
   const currentRole = roles.find((r) => r.roleKey === roleKey) || null;
 
+  // Same test as admin/audit.js and admin/employees.js — keep them in step.
+  const isSuperAdmin = user?.role === 'HR_SUPER_ADMIN';
+
   // Employees the ZingHR master owns. They are launched from "Launch from
   // Master" and must not be offered here: this screen lists employees per
   // CYCLE, so somebody already assessed in one cycle reappears as launchable
@@ -374,10 +377,20 @@ export default function AssessmentsPage({ user }) {
     }
   }
 
-  // Delete a PENDING_RM pair
-  async function handleDeletePair(pairId, empName) {
-    if (!confirm(`Delete assessment for ${empName}?\n\nThis will remove the pair record. You can relaunch afterward if needed.`))
-      return;
+  // Delete a pair. In-flight ones are routine — HR reroutes or relaunches them.
+  // A FINALIZED one is not: it is real completed work, so only a Super Admin is
+  // offered it (the API has always allowed exactly that) and the confirmation
+  // spells out what goes and what stays. The case it exists for is an
+  // accidental launch that was closed to get it out of the way, which leaves a
+  // finished assessment in a cycle the person was never part of.
+  async function handleDeletePair(pairId, empName, finalized = false) {
+    const message = finalized
+      ? `Delete the COMPLETED assessment for ${empName} in "${cycle}"?\n\n`
+        + `This permanently removes that finalised record — its answers, HR review rows and audit entries — for THIS CYCLE ONLY. `
+        + `The same person's assessments in other cycles are not touched, and the employee is not removed.\n\n`
+        + `Intended for undoing an accidental launch. Do not use it to erase genuine completed work.`
+      : `Delete assessment for ${empName}?\n\nThis will remove the pair record. You can relaunch afterward if needed.`;
+    if (!confirm(message)) return;
 
     setDeleting(pairId);
     try {
@@ -749,12 +762,27 @@ export default function AssessmentsPage({ user }) {
                             Edit & Launch
                           </button>
                         ) : pair.status === 'FINALIZED' ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700" title="Assessment completed and locked">
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Completed
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700" title="Assessment completed and locked">
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Completed
+                            </span>
+                            {/* Super Admin only, matching what pairs/delete has always
+                                permitted. Without this the console offered no way to undo
+                                an accidental launch that had been closed — the row simply
+                                sat in a cycle its subject was never part of. */}
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => handleDeletePair(pair.pairId, emp.empName, true)}
+                                disabled={deleting === pair.pairId}
+                                className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40 transition-all"
+                                title={`Remove this completed assessment from ${cycle} — for undoing an accidental launch`}>
+                                {deleting === pair.pairId ? '…' : 'Delete'}
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <>
                             {/* Resend only for SELF/RM/BH stages (resend-invite endpoint scope) */}
