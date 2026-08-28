@@ -80,14 +80,19 @@ function QuestionField({ question, value, onChange, disabled, rmValue, hasError 
 
 // ── Profile card ─────────────────────────────────────────────────────────────
 
-function ProfileCard({ empCode, empName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
   const [open, setOpen] = useState(true);
   const profileEntries = Object.entries(profileData || {});
 
-  // Always show emp code + name first, then all other profile fields
+  // Identity first, then all other profile fields. RM/BH names are stripped
+  // from profileData (they are routing columns), so they have to be surfaced
+  // explicitly — same list the COTO and Self forms show, so everyone in the
+  // flow sees the same employee record.
   const fixed = [
     empCode ? ['EMP CODE', empCode] : null,
     empName ? ['EMP NAME', empName] : null,
+    ['RM NAME', rmName && String(rmName).trim() ? rmName : '—'],
+    ['BH NAME', bhName && String(bhName).trim() ? bhName : '—'],
   ].filter(Boolean);
   const entries = [...fixed, ...profileEntries];
   if (!entries.length) return null;
@@ -217,7 +222,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
         <BhHeader />
         <IdentityStrip pair={pair} />
         <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
-          <ProfileCard empCode={pair.empCode} empName={pair.empName} profileData={employee?.profileData} />
+          <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
           <div className="mb-5 flex items-start gap-3 rounded-xl bg-green-50 border border-green-200 px-5 py-4 text-sm text-green-800">
             <svg className="mt-0.5 w-5 h-5 shrink-0 text-green-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -253,7 +258,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
       <BhHeader />
       <IdentityStrip pair={pair} />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
-        <ProfileCard profileData={employee?.profileData} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
         {priorStages.length > 0 && <PriorAnswersPanel stages={priorStages} title="Earlier Responses" />}
 
         {submitted ? (
