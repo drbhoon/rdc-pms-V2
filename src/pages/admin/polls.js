@@ -117,7 +117,7 @@ function PollList({ polls, selectedId, onSelect, onCreated, say }) {
     try {
       const res = await fetch('/api/admin/polls', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), questions: [blankQuestion()] }),
+        body: JSON.stringify({ title: title.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not create the poll');
@@ -192,6 +192,23 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
 
   const byCode = useMemo(() => new Map(people.map((p) => [p.employee_code, p])), [people]);
   const patchQ = (i, patch) => setQuestions((qs) => qs.map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
+  const [newQuestion, setNewQuestion] = useState('');
+
+  function saveQuestions(list, okMessage) {
+    return call(`/api/admin/polls/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questions: list }),
+    }, okMessage);
+  }
+
+  async function addTypedQuestion() {
+    const text = newQuestion.trim();
+    if (!text) return;
+    const next = [...questions, { ...blankQuestion(), text }];
+    setQuestions(next);
+    setNewQuestion('');
+    await saveQuestions(next, 'Question added.');
+  }
 
   return (
     <div className="space-y-6">
@@ -232,13 +249,29 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
 
       {/* Questions */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Questions <span className="text-slate-400 font-normal">({questions.length}/{MAX_QUESTIONS})</span></h3>
-          {!locked && questions.length < MAX_QUESTIONS && (
-            <button onClick={() => setQuestions((qs) => [...qs, blankQuestion()])}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600">+ Add question</button>
-          )}
-        </div>
+        <h3 className="text-sm font-semibold text-slate-700">
+          Questions <span className="text-slate-400 font-normal">({questions.length}/{MAX_QUESTIONS})</span>
+        </h3>
+
+        {/* Type it, press Add. Everything else about a question has a sensible
+            default — vote for a person in this poll — and can be changed below. */}
+        {!locked && questions.length < MAX_QUESTIONS && (
+          <div className="flex gap-2">
+            <input
+              value={newQuestion}
+              onChange={(e) => setNewQuestion(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTypedQuestion(); } }}
+              placeholder="Type your question, e.g. Who should be the captain?"
+              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+            <button onClick={addTypedQuestion} disabled={!!busy || !newQuestion.trim()}
+              className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white disabled:opacity-40">
+              {busy ? '…' : 'Add'}
+            </button>
+          </div>
+        )}
+        {questions.length === 0 && !locked && (
+          <p className="text-xs text-slate-400">No questions yet. Type one above — voters will pick a person from this poll unless you change it.</p>
+        )}
         {locked && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             {progress.responded} vote(s) are already in, so the questions are fixed. Changing them now would
@@ -256,8 +289,8 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
                 className="px-2 py-2 text-xs border border-slate-200 rounded-lg disabled:bg-slate-50">
                 {QUESTION_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
-              {!locked && questions.length > 1 && (
-                <button onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== i))}
+              {!locked && (
+                <button onClick={() => { const next = questions.filter((_, idx) => idx !== i); setQuestions(next); saveQuestions(next, 'Question removed.'); }}
                   className="text-xs text-red-500 font-semibold px-2">Remove</button>
               )}
             </div>
@@ -327,7 +360,7 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
           }, 'Saved.')}
           disabled={!!busy}
           className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white disabled:opacity-40">
-          Save poll
+          Save changes
         </button>
       </div>
 

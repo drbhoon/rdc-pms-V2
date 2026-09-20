@@ -1,9 +1,12 @@
 /** Checking what the admin screen sends — shared by create and update. */
 import { MAX_QUESTIONS, QUESTION_TYPES } from './polls';
 
-export function normaliseQuestions(input) {
+export function normaliseQuestions(input, { allowEmpty = false } = {}) {
   const list = Array.isArray(input) ? input : [];
-  if (!list.length) return { error: 'Add at least one question.' };
+  // A poll is created with a title alone and its questions typed afterwards on
+  // its own screen, so an empty list is valid there. Opening the poll for
+  // voting is what insists on at least one question.
+  if (!list.length) return allowEmpty ? { questions: [] } : { error: 'Add at least one question.' };
   if (list.length > MAX_QUESTIONS) return { error: `A poll can have at most ${MAX_QUESTIONS} questions.` };
 
   const questions = [];

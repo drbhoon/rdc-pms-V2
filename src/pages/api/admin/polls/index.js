@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { title, description, closesAt, questions } = req.body || {};
     if (!String(title || '').trim()) return res.status(400).json({ error: 'A title is required.' });
-    const parsed = normaliseQuestions(questions);
+    const parsed = normaliseQuestions(questions, { allowEmpty: true });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
 
     try {
