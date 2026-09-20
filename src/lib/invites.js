@@ -40,6 +40,11 @@ function appUrl() {
   );
 }
 
+/** Same base URL, for anything outside this module that builds a public link. */
+export function appBaseUrl() {
+  return appUrl();
+}
+
 // Race runInvites against a hard timeout. Use this in form-submit handlers
 // (RM/Self submit) so the user sees confirmation only AFTER the next reviewer
 // is emailed — but never waits more than `ms` if SMTP is slow. Whatever

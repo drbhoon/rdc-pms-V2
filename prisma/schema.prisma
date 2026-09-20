@@ -250,3 +250,73 @@ enum HrRole {
   HR_ADMIN
   HR_SUPER_ADMIN
 }
+
+// ── Polls ──────────────────────────────────────────────────────────────────
+// A short vote among a group of people — best presentation, team leader, and
+// the like. Deliberately NOT an assessment: no reviewer chain, no cycle, no
+// employee/template link. One e-mail each, one vote each, results as Excel.
+//
+// Votes are NOT secret, by decision: the results name who voted for whom, so a
+// contested result can be checked. Say so on the voting page.
+model Poll {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      PollStatus @default(DRAFT)
+  // Both ways of ending it: a closing date, and a Close now button. Whichever
+  // comes first wins — see pollIsOpen().
+  closesAt    DateTime?
+  createdBy   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  questions    PollQuestion[]
+  participants PollParticipant[]
+}
+
+model PollQuestion {
+  id       String  @id @default(cuid())
+  pollId   String
+  order    Int
+  text     String
+  // SINGLE_CHOICE | MULTI_CHOICE | RATING_1_5 | SHORT_TEXT
+  type     String  @default("SINGLE_CHOICE")
+  // PARTICIPANTS = the options ARE the people in this poll (vote for a person,
+  // never yourself). LIST = the options typed below.
+  optionSource String @default("LIST")
+  options  Json?
+  maxChoices Int?
+  required Boolean @default(true)
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, order])
+  @@index([pollId])
+}
+
+// One row per invited person: their link, and their answers once they vote.
+// Answers live here rather than in their own table because a person votes
+// once — that is the rule, and one row per voter is what enforces it.
+model PollParticipant {
+  id          String    @id @default(cuid())
+  pollId      String
+  empCode     String
+  name        String
+  email       String
+  token       String    @unique @default(cuid())
+  invitedOn   DateTime?
+  respondedOn DateTime?
+  answers     Json?
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, empCode])
+  @@index([pollId])
+  @@index([email])
+}
+
+enum PollStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}

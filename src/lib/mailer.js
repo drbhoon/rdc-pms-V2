@@ -319,3 +319,44 @@ export async function sendReviewerBatch({ to, name, role, roleLabel, cycle, pair
   }
   console.log(`[mailer] ${isReminder ? 'Reminder' : 'Batch'} ${role} email → ${to} (${pairs.length} pairs, ${sendResult.attempts} attempt${sendResult.attempts > 1 ? 's' : ''}, msgId=${sendResult.messageId || '—'})`);
 }
+
+// ── Poll invitation / reminder ────────────────────────────────────────────────
+// One link per person: it is their vote, and the results name who cast it.
+export async function sendPollInvite({ name, email, pollTitle, description, closesAt, voteUrl, isReminder = false }) {
+  const transport = getTransport();
+  if (!transport) {
+    console.log('[mailer] SMTP not configured — skipping poll email to', email);
+    return { ok: false, skipped: true };
+  }
+  const closing = closesAt
+    ? `<p style="margin:0 0 16px;">Voting closes on <strong>${new Date(closesAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</strong>.</p>`
+    : '';
+  const result = await sendWithRetry(transport, {
+    from: from(),
+    to: email,
+    subject: `${isReminder ? 'Reminder' : 'Please vote'}: ${pollTitle}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1e293b;">
+        <div style="background:#0f172a;border-radius:8px 8px 0 0;padding:16px 24px;">
+          <span style="color:#fff;font-weight:700;font-size:18px;">RDC PARAKH</span>
+          <span style="color:#94a3b8;font-size:13px;margin-left:8px;">POLL</span>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:24px;">
+          <p style="margin:0 0 16px;">Dear <strong>${name}</strong>,</p>
+          <p style="margin:0 0 16px;">${isReminder ? 'You have not voted yet in this poll:' : 'Your vote is requested:'}</p>
+          <p style="margin:0 0 8px;font-size:16px;font-weight:700;">${pollTitle}</p>
+          ${description ? `<p style="margin:0 0 16px;color:#475569;">${description}</p>` : ''}
+          ${closing}
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${voteUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:15px;">
+              Cast your vote →
+            </a>
+          </div>
+          <p style="font-size:12px;color:#94a3b8;margin:0;">This link is unique to you and can be used once. Votes are not anonymous — the result sheet shows who voted for whom.</p>
+        </div>
+      </div>
+    `,
+  });
+  console.log(`[mailer] poll ${isReminder ? 'reminder' : 'invite'} to ${email}:`, result.ok ? 'sent' : result.error);
+  return result;
+}
