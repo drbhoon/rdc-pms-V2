@@ -19,8 +19,9 @@ import {
 } from './queries';
 import { runInvitesWithTimeout } from './invites';
 import { questionAudience, isReservedColumnKey } from './ojt';
+import { hrSpocNameFor } from './basicData';
+import { hrFieldsForPair, questionsForPair } from './templateSnapshot';
 
-const FIELDS_KEY = { HR_SPOC: 'hrSpocFields', HR_HEAD: 'hrHeadFields', COTO: 'cotoFields' };
 const AUDIT_ACTION = {
   HR_SPOC: 'HR_SPOC_SUBMITTED',
   HR_HEAD: 'HR_HEAD_SUBMITTED',
@@ -89,10 +90,10 @@ export function makeHrFormHandler(role) {
         const { review, pair, template } = found;
 
         // Build read-only candidate ratings (the standard Self/RM/BH answers).
-        const questions = normQuestions(template?.questions);
+        const questions = normQuestions(questionsForPair(pair, template));
 
         // This role's editable fields.
-        const fields = normFields(template?.[FIELDS_KEY[role]]);
+        const fields = normFields(hrFieldsForPair(pair, template, role));
 
         // Earlier HR stages' comments, cumulative (read-only). For HR_SPOC this
         // is empty; HR_HEAD sees HR_SPOC; COTO sees HR_SPOC + HR_HEAD.
@@ -106,7 +107,7 @@ export function makeHrFormHandler(role) {
           priorHr.push({
             role: r,
             name: rev.name || null,
-            fields: normFields(template?.[FIELDS_KEY[r]]),
+            fields: normFields(hrFieldsForPair(pair, template, r)),
             values: rev.fields || {},
             submittedOn: rev.submittedOn,
           });
@@ -138,6 +139,8 @@ export function makeHrFormHandler(role) {
           status:    pair.status,
           rmName:    pair.rmName,
           bhName:    pair.bhName,
+          // Shown in the basic data on every form; '—' when this template has no HR-SPOC.
+          hrSpocName: hrSpocNameFor(pair, template),
         };
 
         // OJT: Self/RM/BH each answered DIFFERENT questions, so the shared
@@ -146,7 +149,7 @@ export function makeHrFormHandler(role) {
         const isOjt = template?.templateType === 'OJT';
         let ojtStages = [];
         if (isOjt) {
-          const allQ = (Array.isArray(template?.questions) ? template.questions : []).map((q) => ({
+          const allQ = questionsForPair(pair, template).map((q) => ({
             key:      q.question_key || q.key,
             label:    q.question_label || q.label,
             order:    q.display_order || q.order || 0,

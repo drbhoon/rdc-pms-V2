@@ -14,6 +14,7 @@ import { useState } from 'react';
 import BrandLogo from './BrandLogo';
 import PriorAnswersPanel from './PriorAnswersPanel';
 import { withBase } from '../lib/basePath';
+import { basicDataRows } from '../lib/basicData';
 
 const RATING_LABEL = {
   '1': '1 – Poor', '2': '2 – Below Average', '3': '3 – Average',
@@ -114,17 +115,14 @@ function CandidatePanel({ questions, readonly }) {
 }
 
 // ── Employee profile card (basic info — same as RM/BH forms) ──────────────────
-function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, hrSpocName, profileData }) {
   const [open, setOpen] = useState(true);
   // RM/BH names are stripped from profileData (routing columns), so surface them
   // explicitly here. RM is left blank when the employee has no Reporting Manager.
   const entries = [
-    empCode ? ['EMP CODE', empCode] : null,
-    empName ? ['EMP NAME', empName] : null,
-    ['RM NAME', rmName && String(rmName).trim() ? rmName : '—'],
-    ['BH NAME', bhName && String(bhName).trim() ? bhName : '—'],
+    ...basicDataRows({ empCode, empName, rmName, bhName, hrSpocName }),
     ...Object.entries(profileData || {}),
-  ].filter(Boolean);
+  ];
   if (entries.length === 0) return null;
   return (
     <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -267,7 +265,7 @@ export default function HrCommenterForm({ role, token, data }) {
           </div>
         )}
 
-        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} hrSpocName={pair.hrSpocName} profileData={employee?.profileData} />
         {isOjt
           ? <PriorAnswersPanel stages={ojtStages} title="Employee / RM / BH Responses" />
           : <CandidatePanel questions={questions} readonly={readonly} />}

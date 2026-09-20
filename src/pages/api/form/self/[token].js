@@ -15,6 +15,8 @@ import {
 } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
 import { audienceForKey, isReservedColumnKey } from '../../../../lib/ojt';
+import { hrSpocNameFor } from '../../../../lib/basicData';
+import { questionsForPair } from '../../../../lib/templateSnapshot';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
       // Normalise to camelCase + filter out questions flagged excludeFromSelf=true.
       // For OJT, the employee only answers the EMPLOYEE-audience questions
       // (RM_/BH_ prefixed questions belong to the RM/BH stages).
-      const questions = (Array.isArray(role?.questions) ? role.questions : [])
+      const questions = questionsForPair(pair, role)
         .map((q) => ({
           key:             q.question_key  || q.key,
           label:           q.question_label || q.label,
@@ -63,6 +65,8 @@ export default async function handler(req, res) {
         templateType: pair.templateType || 'STANDARD',
         rmName:       pair.rmName || '',
         bhName:       pair.bhName || '',
+        // Shown in the basic data on every form; '—' when this template has no HR-SPOC.
+        hrSpocName:   hrSpocNameFor(pair, role),
         selfAnswers:  pair.selfAnswers || {},
       };
 
@@ -83,7 +87,7 @@ export default async function handler(req, res) {
 
       // Strip question columns + routing + XLSX empty placeholders + numbered cols
       const fullQuestionKeySet = new Set(
-        (Array.isArray(role?.questions) ? role.questions : [])
+        questionsForPair(pair, role)
           .map((q) => String(q.question_key || q.key || '').toLowerCase().trim())
       );
       const routingCols = new Set(

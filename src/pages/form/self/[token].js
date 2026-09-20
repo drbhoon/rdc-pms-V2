@@ -8,6 +8,7 @@ import { useState } from 'react';
 import ChoiceField from '../../../components/ChoiceField';
 import BrandLogo from '../../../components/BrandLogo';
 import { withBase } from '../../../lib/basePath';
+import { basicDataRows } from '../../../lib/basicData';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -73,17 +74,12 @@ function QuestionField({ question, value, onChange, disabled, hasError }) {
 
 // ── Profile card ─────────────────────────────────────────────────────────────
 
-function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, hrSpocName, profileData }) {
   const [open, setOpen] = useState(true);
   const profileEntries = Object.entries(profileData || {});
   // Reviewer/approver NAMES are shown (not their questions). Hidden when blank
   // (e.g. Feedback templates, or an employee with no RM).
-  const fixed = [
-    empCode ? ['EMP CODE', empCode] : null,
-    empName ? ['EMP NAME', empName] : null,
-    rmName && String(rmName).trim() ? ['RM NAME', rmName] : null,
-    bhName && String(bhName).trim() ? ['BH NAME', bhName] : null,
-  ].filter(Boolean);
+  const fixed = basicDataRows({ empCode, empName, rmName, bhName, hrSpocName });
   const entries = [...fixed, ...profileEntries];
   if (!entries.length) return null;
 
@@ -213,7 +209,7 @@ export default function SelfFormPage({ pair, questions, employee, token }) {
         )}
 
         {/* Profile card */}
-        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} hrSpocName={pair.hrSpocName} profileData={employee?.profileData} />
 
         {/* Locked notice */}
         {isLocked && !submitted && (

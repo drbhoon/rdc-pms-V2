@@ -16,6 +16,7 @@
  */
 import * as XLSX from 'xlsx';
 import { questionAudience } from './ojt';
+import { BLANK } from './basicData';
 
 const HR_DEFS = [
   { role: 'HR_SPOC', label: 'HR-SPOC', key: 'hrSpoc' },
@@ -65,7 +66,7 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
   }
 
   const headers = [
-    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name',
+    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name', 'HR SPOC Name',
     ...profileHeaders,
     'Level 1 Email', 'Level 2 Email', 'Status', 'Reviewer',
     ...questions.map((q) => q.label),
@@ -108,7 +109,10 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
       const v = r.bhAnswers?.[q.key];
       return v === undefined || v === null ? '' : v;
     });
-    const ident = [sr, r.empCode, r.empName, r.rmName, r.bhName, ...profile, r.rmEmail, r.bhEmail, r.status];
+    // HR SPOC sits with the other names: it is who the employee's HR contact
+    // is, not a commenter value, so it repeats on every row like RM and BH.
+    const ident = [sr, r.empCode, r.empName, r.rmName, r.bhName, r.hrSpocName || BLANK,
+                   ...profile, r.rmEmail, r.bhEmail, r.status];
 
     // Feedback templates are employee-only — emit a single SELF row per employee
     // (no empty RM/BH rows).
@@ -133,13 +137,13 @@ export function buildReportWorkbook({ roleLabel, cycle, questions, profileCols, 
     if (lower === 'reviewer') return { wch: 10 };
     if (lower === 'emp code') return { wch: 12 };
     if (lower === 'status') return { wch: 16 };
-    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name') return { wch: 24 };
+    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name' || lower === 'hr spoc name') return { wch: 24 };
     if (lower === 'level 1 email' || lower === 'level 2 email') return { wch: 28 };
     if (lower === 'submitted on') return { wch: 20 };
     if (lower.startsWith('hr-spoc:') || lower.startsWith('hr-head:') || lower.startsWith('coto:')) return { wch: 28 };
     return { wch: 30 };
   });
-  ws['!freeze'] = { xSplit: 5, ySplit: 1 };
+  ws['!freeze'] = { xSplit: 6, ySplit: 1 };
 
   const range = XLSX.utils.decode_range(ws['!ref']);
   for (let c = range.s.c; c <= range.e.c; c++) {
@@ -160,7 +164,7 @@ function buildOjtWorkbook({ questions, profileCols, profileHeaders, rows, hrHead
   const bhQ  = questions.filter((q) => questionAudience(q) === 'BH');
 
   const headers = [
-    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name',
+    'Sr No', 'Emp Code', 'Employee Name', 'Level 1 Name', 'Level 2 Name', 'HR SPOC Name',
     ...profileHeaders,
     'Level 1 Email', 'Level 2 Email', 'Status',
     ...empQ.map((q) => `Employee: ${q.label}`),
@@ -181,7 +185,7 @@ function buildOjtWorkbook({ questions, profileCols, profileHeaders, rows, hrHead
       return v === undefined || v === null ? '' : v;
     });
     return [
-      idx + 1, r.empCode, r.empName, r.rmName, r.bhName,
+      idx + 1, r.empCode, r.empName, r.rmName, r.bhName, r.hrSpocName || BLANK,
       ...profile,
       r.rmEmail, r.bhEmail, r.status,
       ...empQ.map((q) => cell(r.selfAnswers, q)),
@@ -198,12 +202,12 @@ function buildOjtWorkbook({ questions, profileCols, profileHeaders, rows, hrHead
     if (lower === 'sr no') return { wch: 6 };
     if (lower === 'emp code') return { wch: 12 };
     if (lower === 'status') return { wch: 16 };
-    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name') return { wch: 24 };
+    if (lower === 'employee name' || lower === 'level 1 name' || lower === 'level 2 name' || lower === 'hr spoc name') return { wch: 24 };
     if (lower === 'level 1 email' || lower === 'level 2 email') return { wch: 28 };
     if (lower.endsWith('submitted')) return { wch: 20 };
     return { wch: 30 };
   });
-  ws['!freeze'] = { xSplit: 5, ySplit: 1 };
+  ws['!freeze'] = { xSplit: 6, ySplit: 1 };
   const range = XLSX.utils.decode_range(ws['!ref']);
   for (let c = range.s.c; c <= range.e.c; c++) {
     const c0 = ws[XLSX.utils.encode_cell({ r: 0, c })];

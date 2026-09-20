@@ -7,6 +7,8 @@ import { requireAuth } from '../../../lib/auth';
 import { getRole } from '../../../lib/queries';
 import { prisma } from '../../../lib/db';
 import { audienceForKey, isReservedColumnKey } from '../../../lib/ojt';
+import { hrSpocNameFor } from '../../../lib/basicData';
+import { mergedQuestions } from '../../../lib/templateSnapshot';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -37,7 +39,9 @@ export default async function handler(req, res) {
     if (!role) return res.status(404).json({ error: 'Role template not found' });
 
     // Normalize questions to camelCase
-    const questions = (Array.isArray(role.questions) ? role.questions : []).map((q) => ({
+    // Template questions first, then any a pair was asked that the template
+    // no longer has — an edit must not erase answers from the report.
+    const questions = mergedQuestions(role, pairs).map((q) => ({
       key:             q.question_key  || q.key,
       label:           q.question_label || q.label,
       fieldType:       q.field_type    || q.fieldType || 'rating',
@@ -121,6 +125,7 @@ export default async function handler(req, res) {
         rmEmail:   p.rmEmail,
         bhName:    p.bhName,
         bhEmail:   p.bhEmail,
+        hrSpocName: hrSpocNameFor(p, role),
         status:    p.status,
         templateType: p.templateType || 'STANDARD',
         lockStatus: p.lockStatus,

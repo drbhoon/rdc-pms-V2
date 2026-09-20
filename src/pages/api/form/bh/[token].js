@@ -9,6 +9,8 @@
 import { getPairByBhToken, getRole, submitBhAnswers, appendAudit } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
 import { questionAudience, isReservedColumnKey } from '../../../../lib/ojt';
+import { hrSpocNameFor } from '../../../../lib/basicData';
+import { questionsForPair } from '../../../../lib/templateSnapshot';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -23,7 +25,7 @@ export default async function handler(req, res) {
       const isOjt = role?.templateType === 'OJT';
 
       // Normalise ALL questions (with audience).
-      const allQuestions = (Array.isArray(role?.questions) ? role.questions : []).map((q) => ({
+      const allQuestions = questionsForPair(pair, role).map((q) => ({
         key:       q.question_key  || q.key,
         label:     q.question_label || q.label,
         fieldType: q.field_type    || q.fieldType || 'rating',
@@ -80,6 +82,8 @@ export default async function handler(req, res) {
         cycle:     pair.cycle,
         rmName:    pair.rmName,
         bhName:    pair.bhName,
+        // Shown in the basic data on every form; '—' when this template has no HR-SPOC.
+        hrSpocName: hrSpocNameFor(pair, role),
         status:    pair.status,
         rmAnswers: pair.rmAnswers || {},
         bhAnswers: pair.bhAnswers || {},

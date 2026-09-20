@@ -7,6 +7,7 @@ import BrandLogo from '../../../components/BrandLogo';
 import PriorAnswersPanel from '../../../components/PriorAnswersPanel';
 import ChoiceField from '../../../components/ChoiceField';
 import { withBase } from '../../../lib/basePath';
+import { basicDataRows } from '../../../lib/basicData';
 
 const RATING_OPTIONS = [
   { value: '',  label: '— Select —' },
@@ -72,7 +73,7 @@ function QuestionField({ question, value, onChange, disabled, hasError }) {
 
 // ── Profile card ─────────────────────────────────────────────────────────────
 
-function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
+function ProfileCard({ empCode, empName, rmName, bhName, hrSpocName, profileData }) {
   const [open, setOpen] = useState(true);
   const profileEntries = Object.entries(profileData || {});
 
@@ -80,12 +81,7 @@ function ProfileCard({ empCode, empName, rmName, bhName, profileData }) {
   // from profileData (they are routing columns), so they have to be surfaced
   // explicitly — same list the COTO and Self forms show, so everyone in the
   // flow sees the same employee record.
-  const fixed = [
-    empCode ? ['EMP CODE', empCode] : null,
-    empName ? ['EMP NAME', empName] : null,
-    ['RM NAME', rmName && String(rmName).trim() ? rmName : '—'],
-    ['BH NAME', bhName && String(bhName).trim() ? bhName : '—'],
-  ].filter(Boolean);
+  const fixed = basicDataRows({ empCode, empName, rmName, bhName, hrSpocName });
   const entries = [...fixed, ...profileEntries];
   if (!entries.length) return null;
 
@@ -204,7 +200,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
       {/* ── Content ── */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         {/* Profile card */}
-        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} profileData={employee?.profileData} />
+        <ProfileCard empCode={pair.empCode} empName={pair.empName} rmName={pair.rmName} bhName={pair.bhName} hrSpocName={pair.hrSpocName} profileData={employee?.profileData} />
         {priorStages.length > 0 && <PriorAnswersPanel stages={priorStages} title="Employee's Responses" />}
 
         {/* Locked notice */}

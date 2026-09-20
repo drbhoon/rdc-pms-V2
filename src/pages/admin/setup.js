@@ -930,6 +930,7 @@ function TemplateList({ refreshKey }) {
     const e = edits[role.roleKey];
     return {
       includeSelf: e?.includeSelf ?? !!role.includeSelf,
+      roleLabel:   e?.roleLabel   ?? (role.roleLabel || ''),
       questions:   e?.questions   ?? (role.questions || []),
       hrStages:    e?.hrStages    ?? hrStagesOf(role),
     };
@@ -960,6 +961,44 @@ function TemplateList({ refreshKey }) {
     );
     setRoleEdit(roleKey, { questions: updated });
   }
+  // ── Question editing ──────────────────────────────────────────────────────
+  // The LABEL, type and options are editable; the question KEY never is. Keys
+  // are what stored answers are filed under, so renaming one would strand
+  // every answer already given. Deleting a question likewise leaves the answers
+  // where they are — the pair's own copy of the template still lists it, and
+  // the report still shows the column.
+  function questionsOf(roleKey) {
+    const role = roles.find((r) => r.roleKey === roleKey);
+    return (edits[roleKey]?.questions ?? role?.questions ?? []).slice();
+  }
+  function patchQuestion(roleKey, idx, patch) {
+    const next = questionsOf(roleKey).map((q, i) => (i === idx ? { ...q, ...patch } : q));
+    setRoleEdit(roleKey, { questions: next });
+  }
+  function removeQuestion(roleKey, idx) {
+    const list = questionsOf(roleKey);
+    const q = list[idx];
+    if (!confirm(`Remove "${q?.question_label || 'this question'}" from the template?
+
+Assessments already launched keep it, and answers already given stay in the report. New launches will not ask it.`)) return;
+    setRoleEdit(roleKey, { questions: list.filter((_, i) => i !== idx).map((x, i) => ({ ...x, display_order: i + 1 })) });
+  }
+  function moveQuestion(roleKey, idx, delta) {
+    const list = questionsOf(roleKey);
+    const to = idx + delta;
+    if (to < 0 || to >= list.length) return;
+    [list[idx], list[to]] = [list[to], list[idx]];
+    setRoleEdit(roleKey, { questions: list.map((x, i) => ({ ...x, display_order: i + 1 })) });
+  }
+  function addQuestion(roleKey) {
+    const list = questionsOf(roleKey);
+    // A key nobody has used before, so it cannot collide with an answer already
+    // filed under an old question.
+    const key = `q_${Date.now().toString(36)}`;
+    list.push({ question_key: key, question_label: '', field_type: 'narrative', display_order: list.length + 1 });
+    setRoleEdit(roleKey, { questions: list });
+  }
+
   function discardEdits(roleKey) {
     setEdits((prev) => {
       const next = { ...prev };
@@ -977,7 +1016,7 @@ function TemplateList({ refreshKey }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roleKey:     role.roleKey,
-          roleLabel:   role.roleLabel,
+          roleLabel:   (view.roleLabel || '').trim() || role.roleLabel,
           questions:   view.questions,
           profileCols: role.profileCols || [],
           rmNameCol:   role.rmNameCol  ?? null,
@@ -1081,6 +1120,14 @@ function TemplateList({ refreshKey }) {
                         </span>
                       )}
                     </p>
+                    {expanded === r.roleKey && (
+                      <input
+                        value={view.roleLabel}
+                        onChange={(e) => setRoleEdit(r.roleKey, { roleLabel: e.target.value })}
+                        placeholder="Template name"
+                        className="mt-1 w-full max-w-md px-2 py-1 text-sm border border-slate-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    )}
                     <p className="text-xs text-slate-400 mt-0.5 font-mono">{r.roleKey}</p>
                     {r.filename && r.filename !== r.roleLabel && (
                       <p className="text-xs text-slate-400 truncate">{r.filename}</p>
@@ -1179,15 +1226,48 @@ function TemplateList({ refreshKey }) {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {view.questions.map((q, i) => (
-                        <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-4 py-2 text-slate-400">{i + 1}</td>
-                          <td className="px-4 py-2 text-slate-700 max-w-sm" title={q.question_label}>
-                            <span className="truncate block">{q.question_label}</span>
+                        <tr key={q.question_key || i} className="hover:bg-slate-50 align-top">
+                          <td className="px-4 py-2 text-slate-400">
+                            {i + 1}
+                            <div className="flex flex-col leading-none mt-1">
+                              <button type="button" title="Move up" onClick={() => moveQuestion(r.roleKey, i, -1)}
+                                disabled={i === 0}
+                                className="text-slate-300 hover:text-slate-600 disabled:opacity-30">▲</button>
+                              <button type="button" title="Move down" onClick={() => moveQuestion(r.roleKey, i, 1)}
+                                disabled={i === view.questions.length - 1}
+                                className="text-slate-300 hover:text-slate-600 disabled:opacity-30">▼</button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 text-slate-700 max-w-sm">
+                            <input
+                              value={q.question_label || ''}
+                              onChange={(e) => patchQuestion(r.roleKey, i, { question_label: e.target.value })}
+                              placeholder="Question text"
+                              className="w-full px-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <span className="block text-[10px] text-slate-300 font-mono mt-0.5">{q.question_key}</span>
+                            {(q.field_type === 'choice' || q.field_type === 'rating') && (
+                              <div className="mt-2">
+                                <ChoiceOptionsEditor
+                                  options={Array.isArray(q.options) ? q.options : []}
+                                  onChange={(options) => patchQuestion(r.roleKey, i, { options })}
+                                  allowOther={!!q.allowOther}
+                                  onAllowOtherChange={(allowOther) => patchQuestion(r.roleKey, i, { allowOther })}
+                                />
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-2">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${typeBadge(q.field_type)}`}>
-                              {q.field_type}
-                            </span>
+                            <select
+                              value={q.field_type || 'narrative'}
+                              onChange={(e) => patchQuestion(r.roleKey, i, { field_type: e.target.value })}
+                              className={`px-2 py-1 rounded text-xs font-medium border border-slate-200 ${typeBadge(q.field_type)}`}>
+                              {['choice', 'rating', 'narrative', 'number', 'date'].map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                            <button type="button" onClick={() => removeQuestion(r.roleKey, i)}
+                              className="block mt-2 text-[11px] text-red-500 hover:text-red-700 font-semibold">Remove</button>
                           </td>
                           {view.includeSelf && (
                             <td className="px-4 py-2 text-center">
@@ -1204,6 +1284,21 @@ function TemplateList({ refreshKey }) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Add a question + what editing does */}
+              {expanded === r.roleKey && (
+                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/40 flex items-start justify-between gap-3">
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                    Editing a template changes what the <strong>next launch</strong> asks. Assessments already
+                    running keep the questions they were launched with, and past reports keep every answer —
+                    so there is no need to clone a template for a small change.
+                  </p>
+                  <button type="button" onClick={() => addQuestion(r.roleKey)}
+                    className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50">
+                    + Add question
+                  </button>
                 </div>
               )}
 

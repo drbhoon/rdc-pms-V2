@@ -12,6 +12,8 @@ import * as XLSX from 'xlsx';
 import { getHrReviewByToken } from '../../../../../lib/queries';
 import { buildReportWorkbook, reportFilename } from '../../../../../lib/reportXlsx';
 import { audienceForKey, isReservedColumnKey } from '../../../../../lib/ojt';
+import { hrSpocNameFor } from '../../../../../lib/basicData';
+import { questionsForPair } from '../../../../../lib/templateSnapshot';
 
 export default async function handler(req, res) {
   const { token } = req.query;
@@ -24,7 +26,7 @@ export default async function handler(req, res) {
 
   try {
     // Normalise questions + profile cols the same way the admin report does.
-    const questions = (Array.isArray(template?.questions) ? template.questions : [])
+    const questions = questionsForPair(pair, template)
       .map((q) => ({
         key:             q.question_key  || q.key,
         label:           q.question_label || q.label,
@@ -63,6 +65,7 @@ export default async function handler(req, res) {
       empCode: pair.empCode, empName: pair.empName,
       rmName: pair.rmName, rmEmail: pair.rmEmail,
       bhName: pair.bhName, bhEmail: pair.bhEmail,
+      hrSpocName: hrSpocNameFor(pair, template),
       status: pair.status,
       requireSelf: !!pair.requireSelf,
       selfSubmittedOn: pair.selfSubmittedOn,

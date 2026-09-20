@@ -294,21 +294,21 @@ export async function getPairById(pairId) {
 export async function getPairByRmToken(rmToken) {
   return prisma.assessmentPair.findUnique({
     where:   { rmToken },
-    include: { role: true },
+    include: { role: true, hrReviews: true },
   });
 }
 
 export async function getPairByBhToken(bhToken) {
   return prisma.assessmentPair.findUnique({
     where:   { bhToken },
-    include: { role: true },
+    include: { role: true, hrReviews: true },
   });
 }
 
 export async function getPairBySelfToken(selfToken) {
   return prisma.assessmentPair.findUnique({
     where:   { selfToken },
-    include: { role: true },
+    include: { role: true, hrReviews: true },
   });
 }
 
@@ -344,6 +344,9 @@ export async function createPair({
   // V2: post-BH commenter stages, snapshotted from the template by the caller.
   // Pass `{ active, name, email }` for each. Inactive stages are simply omitted.
   hrSpoc = null, hrHead = null, coto = null,
+  // Copy of the template's questions + HR fields as they stand right now, so a
+  // later template edit cannot change what this pair is being asked.
+  templateSnapshot = null,
 }) {
   // Build pairId: count existing pairs for this employee+role+cycle
   const existing = await prisma.assessmentPair.count({ where: { empCode, roleKey, cycle } });
@@ -388,6 +391,7 @@ export async function createPair({
       selfEmail: requireSelf ? selfEmail : null,
       selfName:  requireSelf ? selfName  : null,
       requireHrSpoc, requireHrHead, requireCoto,
+      ...(templateSnapshot && { templateSnapshot }),
       selectedBy, selectedOn: new Date(),
       lastUpdatedBy: selectedBy, lastUpdatedOn: new Date(),
       startOn: startOn ? new Date(startOn) : null,

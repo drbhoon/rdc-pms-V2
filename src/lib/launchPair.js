@@ -10,6 +10,7 @@
  */
 import { prisma } from './db';
 import { createPair, appendAudit, getOrCreateReviewerLink } from './queries';
+import { templateSnapshotOf } from './templateSnapshot';
 
 export class LaunchError extends Error {}
 
@@ -125,6 +126,7 @@ export async function launchPair({
       requireSelf: true, requireRm: false,
       selfEmail: email, selfName: employee?.empName || empName,
       templateType: 'FEEDBACK',
+      templateSnapshot: templateSnapshotOf(role),
     });
     await getOrCreateReviewerLink(email, 'SELF', roleKey, cycle);
     await appendAudit({
@@ -204,6 +206,7 @@ export async function launchPair({
     templateType: role.templateType || 'STANDARD',
     selfEmail, selfName,
     hrSpoc: stages.hrSpoc, hrHead: stages.hrHead, coto: stages.coto,
+    templateSnapshot: templateSnapshotOf(role),
   });
 
   // Pre-create the link the invite path will need. With an RM that is the RM's;

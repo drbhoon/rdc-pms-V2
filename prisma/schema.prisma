@@ -142,6 +142,11 @@ model AssessmentPair {
   // Captured at launch from the template so toggling the template later
   // doesn't retro-affect in-flight pairs. The actual commenter data lives
   // in the separate HrReview table (one row per active stage).
+  // What this pair was launched with: { questions, hrSpocFields, hrHeadFields,
+  // cotoFields }. Templates are editable in place, so the forms and reports
+  // read this copy — an edit changes the NEXT launch, never one in flight.
+  // Null on pairs launched before snapshots existed; those read the template.
+  templateSnapshot Json?
   requireHrSpoc   Boolean    @default(false)
   requireHrHead   Boolean    @default(false)
   requireCoto     Boolean    @default(false)
