@@ -4,9 +4,15 @@
  * Replaces the upload-a-spreadsheet flow: pick a template, filter the master,
  * tick the people, name their RM and BH, launch.
  *
- * The whole master is loaded once (about 160 KB for 900-odd people) and every
- * filter and lookup runs against that copy. At this size a request per
- * keystroke would only add lag and race conditions.
+ * The filters are the portal's own, from its /master page: On roll / Off roll,
+ * name or code, Location, Designation, Company, Cost centre, date of joining
+ * and date of birth, applied with "Apply filters". The portal runs the query,
+ * so for the same filters this page lists exactly the people /master lists,
+ * and the checkbox lists are the ones /master offers (from its
+ * filter-options endpoint).
+ *
+ * The whole master is still loaded once for the RM / BH / HR SPOC lookups,
+ * which must search everybody whatever the filters show.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
@@ -23,48 +29,180 @@ function Toast({ message, type, onClose }) {
   return <div className={type === 'error' ? `${base} bg-red-600 text-white` : `${base} bg-green-600 text-white`}>{message}</div>;
 }
 
-/** Distinct, sorted values of one field across the master. */
-function distinct(rows, field) {
-  return [...new Set(rows.map((r) => r[field]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+// ── The portal's /master filter panel ─────────────────────────────────────
+// Carried over from rdc-hr-portal app/master/FilterPanel.tsx, same controls in
+// the same order. The one difference is that /master's panel is a GET form that
+// reloads the page; here that would throw away the people already ticked, so
+// the same values are held in state and "Apply filters" fetches the list.
+
+const NO_FILTERS = {
+  source: '', q: '',
+  location: [], designation: [], company: [], cost_centre: [],
+  doj_from: '', doj_to: '', dob_from: '', dob_to: '',
+};
+
+const FACETS = [
+  { name: 'location', label: 'Location', from: 'locations' },
+  { name: 'designation', label: 'Designation', from: 'designations' },
+  { name: 'company', label: 'Company', from: 'companies' },
+  { name: 'cost_centre', label: 'Cost centre', from: 'costCentres' },
+];
+
+/** How many filters are set — counted as /master counts them. */
+function countFilters(f) {
+  return FACETS.reduce((n, { name }) => n + f[name].length, 0)
+    + (f.q.trim() ? 1 : 0) + (f.source ? 1 : 0)
+    + ['doj_from', 'doj_to', 'dob_from', 'dob_to'].filter((k) => f[k]).length;
 }
 
-function FacetBox({ label, options, selected, onToggle, onClear }) {
-  const [q, setQ] = useState('');
+/** The filters as the master API's query string (the same names /master uses). */
+function filterQuery(f) {
+  const params = new URLSearchParams({ picker: '1' });
+  if (f.q.trim()) params.set('q', f.q.trim());
+  if (f.source) params.set('source', f.source);
+  for (const { name } of FACETS) for (const v of f[name]) params.append(name, v);
+  for (const k of ['doj_from', 'doj_to', 'dob_from', 'dob_to']) if (f[k]) params.set(k, f[k]);
+  return params.toString();
+}
+
+/** A searchable checkbox list for one facet, as on /master. */
+function FacetFilter({ label, options, selected, onChange }) {
+  const [query, setQuery] = useState('');
   const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const matches = needle ? options.filter((o) => o.toLowerCase().includes(needle)) : options;
-    // Keep ticked values visible even when the search would hide them.
+    const q = query.trim().toLowerCase();
+    const matches = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+    // Chosen values stay visible even when the search would hide them —
+    // otherwise a tick silently vanishes as soon as you type the next word.
     const pinned = options.filter((o) => selected.includes(o) && !matches.includes(o));
     return [...pinned, ...matches];
-  }, [q, options, selected]);
+  }, [query, options, selected]);
+
+  function toggle(option) {
+    onChange(selected.includes(option) ? selected.filter((v) => v !== option) : [...selected, option]);
+  }
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white">
+    <div className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
-        {selected.length > 0
-          ? <button onClick={onClear} className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-200">{selected.length} ✕</button>
-          : <span className="text-[11px] text-slate-400">{options.length}</span>}
+        <span className="text-sm font-semibold text-slate-700">{label}</span>
+        {selected.length > 0 ? (
+          <button type="button" onClick={() => onChange([])} title="Clear this filter"
+                  className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-200">
+            {selected.length} selected ✕
+          </button>
+        ) : (
+          <span className="text-xs text-slate-400">{options.length}</span>
+        )}
       </div>
-      <div className="px-2 pt-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${label.toLowerCase()}…`}
-               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs focus:border-blue-400 focus:bg-white focus:outline-none" />
+      <div className="px-3 pt-2">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+               placeholder={`Search ${label.toLowerCase()}…`}
+               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:border-blue-400 focus:bg-white focus:outline-none" />
       </div>
-      <ul className="mt-1 max-h-40 overflow-y-auto px-1 pb-1 text-xs">
-        {shown.length === 0 && <li className="px-2 py-2 text-center text-slate-400">No match</li>}
-        {shown.map((o) => (
-          <li key={o}>
-            <label className={`flex cursor-pointer items-start gap-2 rounded px-2 py-1 ${selected.includes(o) ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-700'}`}>
-              {/* Explicit name: the wrapping <label> alone left these
-                  announced as bare "on" to assistive tech and to tooling. */}
-              <input type="checkbox" aria-label={`${label}: ${o}`}
-                     checked={selected.includes(o)} onChange={() => onToggle(o)} className="mt-0.5" />
-              <span className="leading-snug">{o}</span>
-            </label>
-          </li>
-        ))}
+      <ul className="mt-1 max-h-52 overflow-y-auto px-1 py-1 text-sm">
+        {shown.length === 0 ? (
+          <li className="px-2 py-3 text-center text-xs text-slate-400">No match</li>
+        ) : shown.map((option) => {
+          const on = selected.includes(option);
+          return (
+            <li key={option}>
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 ${
+                on ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                {/* Explicit name: the wrapping <label> alone left these
+                    announced as bare "on" to assistive tech and to tooling. */}
+                <input type="checkbox" checked={on} onChange={() => toggle(option)}
+                       aria-label={`${label}: ${option}`} className="mt-0.5 accent-blue-600" />
+                <span className="leading-snug">{option}</span>
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </div>
+  );
+}
+
+function FilterPanel({ draft, setDraft, options, appliedCount, resultCount, applying, onApply, onClear }) {
+  const set = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onApply(); }}
+          className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        {/* On roll / off roll first, as on /master: it is the first cut HR
+            makes — two populations from two feeds — where the rest only
+            narrow within whichever was picked. */}
+        <fieldset className="w-full">
+          <legend className="mb-1 block text-sm font-semibold text-slate-700">Employees</legend>
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 bg-white">
+            {[
+              { value: '', label: 'All' },
+              { value: 'onroll', label: 'On roll' },
+              { value: 'offroll', label: 'Off roll / third party' },
+            ].map((option) => (
+              <label key={option.value || 'all'} className="cursor-pointer">
+                <input type="radio" name="source" value={option.value}
+                       checked={draft.source === option.value}
+                       onChange={() => set('source', option.value)} className="peer sr-only" />
+                <span className="block px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 peer-checked:bg-blue-600 peer-checked:text-white">
+                  {option.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className="min-w-[260px] flex-1 text-sm">
+          <span className="mb-1 block font-semibold text-slate-700">Search name or code</span>
+          <input value={draft.q} onChange={(e) => set('q', e.target.value)} placeholder="e.g. Gurumurthy or G00064"
+                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-blue-400 focus:outline-none" />
+        </label>
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={applying}
+                  className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60">
+            {applying ? 'Applying…' : 'Apply filters'}
+          </button>
+          {(appliedCount > 0 || countFilters(draft) > 0) && (
+            <button type="button" onClick={onClear}
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
+              Clear all
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {FACETS.map(({ name, label, from }) => (
+          <FacetFilter key={name} label={label} options={options[from] || []}
+                       selected={draft[name]} onChange={(v) => set(name, v)} />
+        ))}
+
+        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          {[
+            ['doj', 'Date of joining', 'Tenure — e.g. the 2025 intake'],
+            ['dob', 'Date of birth', 'Age band'],
+          ].map(([prefix, label, hint]) => (
+            <fieldset key={prefix}>
+              <legend className="text-sm font-semibold text-slate-700">{label}</legend>
+              <div className="mt-1 flex flex-col gap-1">
+                <input type="date" value={draft[`${prefix}_from`]} aria-label={`${label} from`}
+                       onChange={(e) => set(`${prefix}_from`, e.target.value)}
+                       className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:border-blue-400 focus:bg-white focus:outline-none" />
+                <input type="date" value={draft[`${prefix}_to`]} aria-label={`${label} to`}
+                       onChange={(e) => set(`${prefix}_to`, e.target.value)}
+                       className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:border-blue-400 focus:bg-white focus:outline-none" />
+              </div>
+              <p className="mt-1 text-xs text-slate-400">{hint}</p>
+            </fieldset>
+          ))}
+        </div>
+      </div>
+
+      <p className="mt-3 text-xs text-slate-500">
+        {appliedCount > 0
+          ? `${appliedCount} filter${appliedCount === 1 ? '' : 's'} applied — ${resultCount} matching. Leave a box untouched to include everyone.`
+          : 'Leave a box untouched to include everyone. Employees with no recorded date fall outside a date range.'}
+      </p>
+    </form>
   );
 }
 
@@ -84,8 +222,15 @@ export default function LaunchFromMaster() {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] = useState('');
-  const [facets, setFacets] = useState({ designation: [], location: [], company: [] });
+  // What the panel shows (draft) and what the list was last fetched with
+  // (applied). results is that fetched list; null means no filter is applied
+  // and the whole master is listed.
+  const [draft, setDraft] = useState(NO_FILTERS);
+  const [applied, setApplied] = useState(NO_FILTERS);
+  const [results, setResults] = useState(null);
+  const [applying, setApplying] = useState(false);
+  const [filterOptions, setFilterOptions] = useState({ locations: [], designations: [], companies: [], costCentres: [] });
+  const [optionsError, setOptionsError] = useState('');
   const [picked, setPicked] = useState({});   // empCode -> { rmCode, bhCode }
   const [launching, setLaunching] = useState(false);
   const [result, setResult] = useState(null);
@@ -154,29 +299,48 @@ export default function LaunchFromMaster() {
       .finally(() => setLoading(false));
   }, []);
 
-  const options = useMemo(() => ({
-    designation: distinct(people, 'designation'),
-    location:    distinct(people, 'location'),
-    company:     distinct(people, 'company'),
-  }), [people]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return people.filter((p) => {
-      if (q && !(`${p.employee_name} ${p.employee_code}`.toLowerCase().includes(q))) return false;
-      for (const key of ['designation', 'location', 'company']) {
-        if (facets[key].length && !facets[key].includes(p[key])) return false;
-      }
-      return true;
-    });
-  }, [people, search, facets]);
-
-  const toggleFacet = useCallback((key, value) => {
-    setFacets((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(value) ? prev[key].filter((v) => v !== value) : [...prev[key], value],
-    }));
+  // The checkbox lists, exactly as /master offers them.
+  useEffect(() => {
+    fetch('/api/admin/master/filter-options')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        return d;
+      })
+      .then(setFilterOptions)
+      .catch((e) => setOptionsError(e.message));
   }, []);
+
+  // The portal runs the query, as it does for /master. Ticked people are kept
+  // whatever the list shows next.
+  const applyFilters = useCallback(async () => {
+    const wanted = draft;
+    if (countFilters(wanted) === 0) {
+      setApplied(NO_FILTERS);
+      setResults(null);
+      return;
+    }
+    setApplying(true);
+    try {
+      const r = await fetch(`/api/admin/master/employees?${filterQuery(wanted)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      setResults(d.employees || []);
+      setApplied(wanted);
+    } catch (e) {
+      setToast({ message: `Could not apply the filters: ${e.message}`, type: 'error' });
+    } finally {
+      setApplying(false);
+    }
+  }, [draft]);
+
+  const clearFilters = useCallback(() => {
+    setDraft(NO_FILTERS);
+    setApplied(NO_FILTERS);
+    setResults(null);
+  }, []);
+
+  const shown = results ?? people;
 
   function togglePick(code) {
     setPicked((prev) => {
@@ -361,35 +525,24 @@ export default function LaunchFromMaster() {
           <strong>The employee master could not be read.</strong> {loadError}
         </div>
       ) : (
-        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <label className="min-w-[240px] flex-1 text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Search name or code</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. Gurumurthy or G00064"
-                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-            </label>
-            <p className="text-sm text-slate-600">
-              {loading ? 'Loading the master…' : <><strong>{filtered.length}</strong> of {people.length} shown</>}
-              {alreadyIn.size > 0 && (
-                <span className="ml-2 text-slate-500">
-                  · {alreadyIn.size} already in {cycle}
-                </span>
-              )}
+        <div className="mt-5">
+          <FilterPanel draft={draft} setDraft={setDraft} options={filterOptions}
+                       appliedCount={countFilters(applied)} resultCount={shown.length}
+                       applying={applying} onApply={applyFilters} onClear={clearFilters} />
+          {optionsError && (
+            <p className="mt-2 text-xs text-amber-700">
+              The filter lists could not be loaded ({optionsError}). Name, On roll / Off roll and date filters still work.
             </p>
-          </div>
+          )}
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {['designation', 'location', 'company'].map((key) => (
-              <FacetBox
-                key={key}
-                label={key === 'company' ? 'Company' : key[0].toUpperCase() + key.slice(1)}
-                options={options[key]}
-                selected={facets[key]}
-                onToggle={(v) => toggleFacet(key, v)}
-                onClear={() => setFacets((p) => ({ ...p, [key]: [] }))}
-              />
-            ))}
-          </div>
+          <p className="mt-3 text-sm text-slate-600">
+            {loading ? 'Loading the master…' : <><strong>{shown.length}</strong> of {people.length} shown</>}
+            {alreadyIn.size > 0 && (
+              <span className="ml-2 text-slate-500">
+                · {alreadyIn.size} already in {cycle}
+              </span>
+            )}
+          </p>
 
           <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-xs">
@@ -403,7 +556,7 @@ export default function LaunchFromMaster() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.slice(0, 400).map((p) => {
+                {shown.slice(0, 400).map((p) => {
                   const done = alreadyIn.has(p.employee_code);
                   return (
                     <tr key={p.employee_code}
@@ -432,9 +585,9 @@ export default function LaunchFromMaster() {
                 })}
               </tbody>
             </table>
-            {filtered.length > 400 && (
+            {shown.length > 400 && (
               <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">
-                Showing the first 400 of {filtered.length}. Narrow the filters to see the rest.
+                Showing the first 400 of {shown.length}. Narrow the filters to see the rest.
               </p>
             )}
           </div>

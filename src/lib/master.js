@@ -24,16 +24,10 @@ export function masterConfigured() {
  * @param {object} opts
  * @param {string[]} [opts.codes]   restrict to these employee codes
  * @param {boolean}  [opts.picker]  trim each row to what a name lookup needs
- * @param {object}   [opts.filters] location/designation/company/cost_centre arrays,
- *                                  q, and the dob_/doj_ date bounds
+ * @param {object}   [opts.filters] location/designation/company/cost_centre/source
+ *                                  arrays, q, and the dob_/doj_ date bounds
  */
 export async function fetchMasterEmployees(opts = {}) {
-  if (!masterConfigured()) {
-    throw new Error(
-      'Employee master is not configured. Set MASTER_API_URL and MASTER_API_KEY.',
-    );
-  }
-
   const params = new URLSearchParams();
   if (opts.picker) params.set('fields', 'picker');
   for (const code of opts.codes || []) params.append('code', code);
@@ -45,7 +39,35 @@ export async function fetchMasterEmployees(opts = {}) {
     }
   }
 
-  const url = `${BASE()}/api/master/employees${params.toString() ? `?${params}` : ''}`;
+  const data = await masterGet('/api/master/employees', params);
+  return Array.isArray(data?.employees) ? data.employees : [];
+}
+
+/**
+ * The choices behind the master's filters — Location, Designation, Company and
+ * Cost centre — exactly as the portal's own /master page offers them.
+ */
+export async function fetchMasterFilterOptions() {
+  const data = await masterGet('/api/master/filter-options');
+  const list = (v) => (Array.isArray(v) ? v : []);
+  return {
+    locations: list(data?.locations),
+    designations: list(data?.designations),
+    companies: list(data?.companies),
+    costCentres: list(data?.costCentres),
+  };
+}
+
+/** GET a master endpoint with our key; the error says which failure it was. */
+async function masterGet(path, params) {
+  if (!masterConfigured()) {
+    throw new Error(
+      'Employee master is not configured. Set MASTER_API_URL and MASTER_API_KEY.',
+    );
+  }
+
+  const query = params && params.toString();
+  const url = `${BASE()}${path}${query ? `?${query}` : ''}`;
 
   let response;
   try {
@@ -66,12 +88,14 @@ export async function fetchMasterEmployees(opts = {}) {
   if (response.status === 401) {
     throw new Error('The employee master rejected our key (MASTER_API_KEY).');
   }
+  if (response.status === 404) {
+    throw new Error(`The employee master does not offer ${path} — the portal needs updating.`);
+  }
   if (!response.ok) {
     throw new Error(`Employee master returned HTTP ${response.status}.`);
   }
 
-  const data = await response.json();
-  return Array.isArray(data?.employees) ? data.employees : [];
+  return response.json();
 }
 
 /** Index a list of master records by employee_code for quick lookup. */

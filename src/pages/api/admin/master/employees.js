@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { picker, q, location, designation, company, cost_centre,
+  const { picker, q, location, designation, company, cost_centre, source,
           doj_from, doj_to, dob_from, dob_to } = req.query;
 
   // Next gives a string for one value and an array for several; the master
@@ -43,6 +43,9 @@ export default async function handler(req, res) {
         designation: list(designation),
         company: list(company),
         cost_centre: list(cost_centre),
+        // On roll / Off roll, as on the portal's /master page: "onroll" or
+        // "offroll"; absent means both.
+        source: list(source),
         doj_from: doj_from || '',
         doj_to: doj_to || '',
         dob_from: dob_from || '',
