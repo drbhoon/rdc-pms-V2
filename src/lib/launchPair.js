@@ -138,11 +138,14 @@ export async function launchPair({
     return pair;
   }
 
-  // ── STANDARD / OJT: BH mandatory, RM optional. ───────────────────────────
-  if (!bhName || !bhEmail) {
-    throw new LaunchError(`${empName} (${empCode}) has no BH. No appraisal can run without one.`);
-  }
+  // ── STANDARD / OJT: RM or BH — at least one. ─────────────────────────────
+  // Either may be skipped, never both. No RM: the pair starts at the BH. No
+  // BH: the RM's submission moves it straight on to the commenter stages.
   const requireRm = !!(String(rmName || '').trim() && String(rmEmail || '').trim());
+  const requireBh = !!(String(bhName || '').trim() && String(bhEmail || '').trim());
+  if (!requireRm && !requireBh) {
+    throw new LaunchError(`${empName} (${empCode}) has neither an RM nor a BH. Name at least one of them.`);
+  }
 
   let requireSelf = false;
   let selfEmail = null;
@@ -200,9 +203,10 @@ export async function launchPair({
     empCode, empName, roleKey, cycle,
     rmName:  requireRm ? rmName  : '',
     rmEmail: requireRm ? rmEmail : '',
-    bhName, bhEmail,
+    bhName:  requireBh ? bhName  : '',
+    bhEmail: requireBh ? bhEmail : '',
     selectedBy, startOn: startOn || null,
-    requireSelf, requireRm,
+    requireSelf, requireRm, requireBh,
     templateType: role.templateType || 'STANDARD',
     selfEmail, selfName,
     hrSpoc: stages.hrSpoc, hrHead: stages.hrHead, coto: stages.coto,
@@ -227,8 +231,9 @@ export async function launchPair({
     roleKey: pair.roleKey, cycle: pair.cycle, performedBy: selectedBy,
     details: {
       rmName: requireRm ? rmName : '', rmEmail: requireRm ? rmEmail : '',
-      bhName, bhEmail, startOn: startOn || null,
-      requireSelf, requireRm,
+      bhName: requireBh ? bhName : '', bhEmail: requireBh ? bhEmail : '',
+      startOn: startOn || null,
+      requireSelf, requireRm, requireBh,
       ...(requireSelf ? { selfEmail } : {}),
       requireHrSpoc: stages.hrSpoc.active,
       requireHrHead: stages.hrHead.active,

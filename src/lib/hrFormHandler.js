@@ -16,6 +16,7 @@ import {
   submitHrReview,
   appendAudit,
   HR_ORDER,
+  bhStageDone,
 } from './queries';
 import { runInvitesWithTimeout } from './invites';
 import { questionAudience, isReservedColumnKey } from './ojt';
@@ -65,7 +66,7 @@ function stageActive(pair, role) {
 
 // Have BH + every earlier active HR stage completed? (so this role may act)
 function readyForRole(pair, role) {
-  if (!pair.bhSubmittedOn) return false;
+  if (!bhStageDone(pair)) return false;
   const idx = HR_ORDER.indexOf(role);
   for (let i = 0; i < idx; i++) {
     const r = HR_ORDER[i];

@@ -149,8 +149,12 @@ export default async function handler(req, res) {
       // Ensure the BH reviewer-link exists, then await runInvites with a 12s
       // hard cap so the BH email actually fires before we tell the RM "thanks".
       // Anything that times out is picked up by the next cron tick.
+      // A pair with no BH skips this: it has already moved on to the commenter
+      // stages (or finalised), and runInvites picks those up.
       try {
-        await getOrCreateReviewerLink(pair.bhEmail, 'BH', pair.roleKey, pair.cycle);
+        if (pair.requireBh !== false && pair.bhEmail) {
+          await getOrCreateReviewerLink(pair.bhEmail, 'BH', pair.roleKey, pair.cycle);
+        }
       } catch (e) {
         console.error('[form/rm] failed to ensure BH ReviewerLink:', e.message);
       }

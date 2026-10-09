@@ -9,7 +9,7 @@
  */
 import {
   getReviewerLinkByToken, getPairsForReviewer, getRole,
-  getHrReviewsForDashboard, HR_ORDER,
+  getHrReviewsForDashboard, HR_ORDER, bhStageDone,
 } from '../../../lib/queries';
 
 const HR_ROLES = new Set(['HR_SPOC', 'HR_HEAD', 'COTO']);
@@ -21,8 +21,10 @@ function hrStageActive(pair, r) {
   if (r === 'COTO')    return !!pair.requireCoto;
   return false;
 }
+const AFTER_BH = ['BH_SUBMITTED', 'HR_SPOC_SUBMITTED', 'HR_HEAD_SUBMITTED', 'FINALIZED'];
+
 function readyForRole(pair, role) {
-  if (!pair.bhSubmittedOn) return false;
+  if (!bhStageDone(pair)) return false;
   const idx = HR_ORDER.indexOf(role);
   for (let i = 0; i < idx; i++) {
     const r = HR_ORDER[i];
@@ -88,18 +90,21 @@ export default async function handler(req, res) {
 
     // Visible / done lists by reviewer role:
     //   SELF: pending = PENDING_SELF; done = anything past it
-    //   RM:   pending = PENDING_RM;   done = RM_SUBMITTED / FINALIZED
-    //   BH:   pending = RM_SUBMITTED; done = FINALIZED
+    //   RM:   pending = PENDING_RM;   done = anything after it
+    //   BH:   pending = RM_SUBMITTED; done = anything after it
+    // "Anything after" includes the HR commenter stages: a pair with HR-SPOC
+    // is not FINALIZED yet, but the RM and BH have finished with it. An RM-only
+    // pair goes from the RM straight there.
     let visibleStatus, submittedStatus;
     if (link.role === 'SELF') {
       visibleStatus    = 'PENDING_SELF';
       submittedStatus  = ['PENDING_RM', 'RM_SUBMITTED', 'FINALIZED'];
     } else if (link.role === 'BH') {
       visibleStatus    = 'RM_SUBMITTED';
-      submittedStatus  = ['FINALIZED'];
+      submittedStatus  = [...AFTER_BH];
     } else {
       visibleStatus    = 'PENDING_RM';
-      submittedStatus  = ['RM_SUBMITTED', 'FINALIZED'];
+      submittedStatus  = ['RM_SUBMITTED', ...AFTER_BH];
     }
 
     const tokenFor = (p) =>

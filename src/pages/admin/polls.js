@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import PersonPicker from '../../components/PersonPicker';
 import { getPageAuth } from '../../lib/auth';
+import { withBase } from '../../lib/basePath';
 import { MAX_PARTICIPANTS, MAX_QUESTIONS, QUESTION_TYPES } from '../../lib/polls';
 
 const TYPE_LABEL = {
@@ -239,7 +240,10 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
                   disabled={!!busy} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 disabled:opacity-40">Close now</button>
               </>
             )}
-            <a href={`/api/admin/polls/${id}/export`}
+            {/* A plain <a> is not rewritten for the /parakh base path (only
+                fetch is patched), so it is prefixed here — without it the
+                download went to hr.rdcc.ai/api/... and returned 404. */}
+            <a href={withBase(`/api/admin/polls/${id}/export`)}
               className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700">Download Excel</a>
             <button onClick={() => { if (confirm(`Delete "${poll.title}" and every vote in it?`)) call(`/api/admin/polls/${id}`, { method: 'DELETE' }, 'Poll deleted.').then(onDeleted); }}
               disabled={!!busy} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 disabled:opacity-40">Delete</button>

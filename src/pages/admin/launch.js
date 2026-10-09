@@ -376,8 +376,9 @@ export default function LaunchFromMaster() {
   }
 
   const pickedCodes = Object.keys(picked);
-  const missingBh = isFeedback ? [] : pickedCodes.filter((c) => !picked[c].bhCode);
-  const canLaunch = roleKey && cycle.trim() && pickedCodes.length > 0 && missingBh.length === 0 && !launching;
+  // Level 1 (RM) or Level 2 (BH) — at least one per employee, either will do.
+  const missingReviewer = isFeedback ? [] : pickedCodes.filter((c) => !picked[c].rmCode && !picked[c].bhCode);
+  const canLaunch = roleKey && cycle.trim() && pickedCodes.length > 0 && missingReviewer.length === 0 && !launching;
 
   // A date of today or earlier is not a schedule — the server treats it as an
   // immediate launch, and the screen has to say the same thing. Promising
@@ -512,7 +513,7 @@ export default function LaunchFromMaster() {
           <p className="mt-3 text-xs text-slate-500">
             {isFeedback
               ? 'Feedback template — employee-only. No RM or BH is needed; the employee’s own e-mail is used.'
-              : `${role.templateType} template. Level 2 is required for every employee; Level 1 is optional and its stage is skipped when left blank.`}
+              : `${role.templateType} template. Every employee needs Level 1 or Level 2 — either one is enough. Whichever is left blank, its stage is skipped.`}
             {role.includeSelf && ' Self-assessment is on, so each employee needs an e-mail on file.'}
             {showSpoc && ` After BH it goes to HR-SPOC${role.hrSpocDefaultName ? '' : ' — pick one per employee below'}, then HR-HEAD, then COTO.`}
           </p>
@@ -600,9 +601,9 @@ export default function LaunchFromMaster() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-700">
               Selected — {pickedCodes.length} {pickedCodes.length === 1 ? 'employee' : 'employees'}
-              {!isFeedback && missingBh.length > 0 && (
+              {!isFeedback && missingReviewer.length > 0 && (
                 <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                  {missingBh.length} still without a Level 2
+                  {missingReviewer.length} still without Level 1 or Level 2
                 </span>
               )}
             </h2>
@@ -641,8 +642,8 @@ export default function LaunchFromMaster() {
               <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Employee</th>
-                  {!isFeedback && <th className="w-56 px-3 py-2">Level 1 <span className="font-normal normal-case text-slate-400">(optional)</span></th>}
-                  {!isFeedback && <th className="w-56 px-3 py-2">Level 2 <span className="font-normal normal-case text-red-500">required</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">Level 1 <span className="font-normal normal-case text-slate-400">(RM)</span></th>}
+                  {!isFeedback && <th className="w-56 px-3 py-2">Level 2 <span className="font-normal normal-case text-slate-400">(BH)</span> <span className="font-normal normal-case text-red-500">— one of the two required</span></th>}
                   {showSpoc && (
                     <th className="w-56 px-3 py-2">
                       HR-SPOC{' '}
@@ -715,7 +716,7 @@ export default function LaunchFromMaster() {
             <p className="text-xs text-slate-500">
               {!roleKey ? 'Choose a template first.'
                 : !cycle.trim() ? 'Give the cycle a name.'
-                : missingBh.length > 0 ? `${missingBh.length} employee${missingBh.length === 1 ? '' : 's'} still need a Level 2 reviewer — no appraisal can run without one.`
+                : missingReviewer.length > 0 ? `${missingReviewer.length} employee${missingReviewer.length === 1 ? '' : 's'} still need a Level 1 or Level 2 reviewer — either one is enough.`
                 : scheduled
                   ? `Ready. Reviewers will be e-mailed on or after ${startOn}.`
                   : 'Ready. Reviewers are e-mailed as soon as you launch.'}

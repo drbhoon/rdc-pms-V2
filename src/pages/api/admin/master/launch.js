@@ -85,16 +85,16 @@ export default async function handler(req, res) {
 
     const isFeedback = role.templateType === 'FEEDBACK';
 
-    // BH is checked up front, before anything is written. Discovering a missing
-    // BH on row 20 of 25 would leave a half-launched cycle that HR then has to
-    // unpick by hand.
+    // RM-or-BH is checked up front, before anything is written. Discovering a
+    // row with neither on row 20 of 25 would leave a half-launched cycle that
+    // HR then has to unpick by hand. Either one alone is enough.
     if (!isFeedback) {
-      const missing = rows.filter((r) => !r.bhCode).map((r) => r.empCode);
+      const missing = rows.filter((r) => !r.rmCode && !r.bhCode).map((r) => r.empCode);
       if (missing.length) {
         return res.status(400).json({
-          error: `No BH selected for ${missing.length} employee${missing.length === 1 ? '' : 's'}: `
+          error: `Neither RM nor BH selected for ${missing.length} employee${missing.length === 1 ? '' : 's'}: `
                + `${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}. `
-               + 'No appraisal can run without a BH.',
+               + 'Name at least one of them.',
         });
       }
     }

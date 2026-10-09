@@ -18,10 +18,19 @@ function hrStageActive(pair, role) {
   return false;
 }
 
+// Is the BH stage behind this pair? Normally that means BH has submitted. A
+// pair launched without a BH (requireBh=false) has no BH stage, so it is
+// behind it as soon as the RM submits. The ONE place this rule lives: the
+// invite query, the commenter forms and the reviewer dashboard all ask here.
+export function bhStageDone(pair) {
+  if (pair?.requireBh === false) return !!pair.rmSubmittedOn;
+  return !!pair?.bhSubmittedOn;
+}
+
 // Has every ACTIVE stage before `role` been completed? (BH must be done too.)
 // `pair` must include its `hrReviews`. Robust to skipped stages.
 function priorStagesComplete(pair, role) {
-  if (!pair.bhSubmittedOn) return false;
+  if (!bhStageDone(pair)) return false;
   const idx = HR_ORDER.indexOf(role);
   for (let i = 0; i < idx; i++) {
     const r = HR_ORDER[i];
@@ -338,6 +347,9 @@ export async function createPair({
   // V2: when the employee has no RM, requireRm=false skips the RM stage and the
   // pair starts directly at RM_SUBMITTED (awaiting BH) with blank RM answers.
   requireRm = true,
+  // With an RM but no BH, requireBh=false: the RM's submission moves the pair
+  // straight past the BH stage. The caller guarantees RM or BH is present.
+  requireBh = true,
   // Template flavour snapshot (STANDARD | FEEDBACK | OJT). FEEDBACK pairs are
   // employee-only and finalise right after the Self submission.
   templateType = 'STANDARD',
@@ -387,6 +399,7 @@ export async function createPair({
       status: initialStatus,
       requireSelf,
       requireRm,
+      requireBh,
       templateType,
       selfEmail: requireSelf ? selfEmail : null,
       selfName:  requireSelf ? selfName  : null,
@@ -519,6 +532,7 @@ export async function getPendingBhInvites() {
     where: {
       status: 'RM_SUBMITTED',
       isArchived: false,
+      requireBh: true,   // a pair without a BH never waits here, but never e-mail '' either
       bhInvitedOn: null,
       role: { isActive: true },
       OR: [{ startOn: null }, { startOn: { lte: new Date() } }],
@@ -547,6 +561,7 @@ export async function getPendingRemindersForBh() {
     where: {
       status: 'RM_SUBMITTED',
       isArchived: false,
+      requireBh: true,   // a pair without a BH never waits here, but never e-mail '' either
       bhInvitedOn: { not: null },
       role: { isActive: true },
     },
@@ -643,12 +658,23 @@ export async function submitSelfAnswers(pairId, answers, performedBy) {
   });
 }
 
+// RM submit: normally the pair waits for BH (RM_SUBMITTED). Without a BH
+// (requireBh=false) there is nobody to wait for, so it moves on exactly as a
+// BH submission would — to the first commenter stage, or FINALIZED+LOCKED.
 export async function submitRmAnswers(pairId, answers, performedBy) {
+  const pair = await prisma.assessmentPair.findUnique({
+    where: { pairId },
+    select: { requireBh: true, requireHrSpoc: true, requireHrHead: true, requireCoto: true },
+  });
+  const next = pair?.requireBh === false
+    ? nextStateAfter('BH', pair)
+    : { status: 'RM_SUBMITTED', locked: false };
   return prisma.assessmentPair.update({
     where: { pairId },
     data: {
       rmAnswers:    answers,
-      status:       'RM_SUBMITTED',
+      status:       next.status,
+      ...(next.locked ? { lockStatus: 'LOCKED' } : {}),
       rmSubmittedOn: new Date(),
       lastUpdatedBy: performedBy,
       lastUpdatedOn: new Date(),

@@ -126,6 +126,11 @@ model AssessmentPair {
   // ratings stay blank, and the pair is created directly at RM_SUBMITTED so it
   // routes straight to BH. Existing/in-flight pairs default to true.
   requireRm       Boolean    @default(true)
+  // The mirror of requireRm: a pair launched with an RM but no BH skips the BH
+  // stage. When the RM submits, the pair moves on as if BH had (to HR-SPOC /
+  // HR-HEAD / COTO, or FINALIZED). At least one of RM and BH is always set.
+  // Existing/in-flight pairs default to true.
+  requireBh       Boolean    @default(true)
   selfToken       String?    @unique @default(cuid())
   selfEmail       String? // captured at launch from Employee.email
   selfName        String? // typically empName — kept for future override

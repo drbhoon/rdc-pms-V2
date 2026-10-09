@@ -95,13 +95,15 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
   async function handleConfirm() {
     // Feedback templates are employee-only — no RM/BH routing to validate.
     if (!isFeedback) {
-      // BH is mandatory. RM is optional — if left blank, the RM stage is skipped
-      // and the assessment routes straight to BH with blank RM ratings.
-      if (!form.bhName || !form.bhEmail) {
-        return setError('Level 2 reviewer name and email are required.');
-      }
+      // RM or BH — at least one. Whichever is left blank, its stage is skipped.
       if ((form.rmName && !form.rmEmail) || (!form.rmName && form.rmEmail)) {
-        return setError('Enter both RM name and email, or leave both blank to route straight to BH.');
+        return setError('Enter both RM name and email, or leave both blank.');
+      }
+      if ((form.bhName && !form.bhEmail) || (!form.bhName && form.bhEmail)) {
+        return setError('Enter both BH name and email, or leave both blank.');
+      }
+      if (!form.rmName && !form.bhName) {
+        return setError('Name a Level 1 or a Level 2 reviewer — at least one is required.');
       }
     }
     setSaving(true);
@@ -173,7 +175,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
           {!isFeedback && (
           <>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Level 1 reviewer <span className="normal-case font-normal text-slate-400">(optional — leave blank to route straight to Level 2)</span>
+            Level 1 reviewer <span className="normal-case font-normal text-slate-400">(Level 1 or Level 2 — at least one; a blank one is skipped)</span>
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -211,11 +213,11 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
           </div>
           {!isFeedback && (
           <>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Level 2 reviewer</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Level 2 reviewer <span className="normal-case font-normal text-slate-400">(optional if Level 1 is named)</span></p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                BH Name <span className="text-red-500">*</span>
+                BH Name
                 {role?.bhNameCol && <span className="ml-1 text-slate-400">({role.bhNameCol})</span>}
               </label>
               <input value={form.bhName} onChange={(e) => set('bhName', e.target.value)}
@@ -224,7 +226,7 @@ function LaunchModal({ employee, cycle, roleKey, role, startOn, onClose, onLaunc
             </div>
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                BH Email <span className="text-red-500">*</span>
+                BH Email
                 {role?.bhEmailCol && <span className="ml-1 text-slate-400">({role.bhEmailCol})</span>}
               </label>
               <input type="email" value={form.bhEmail} onChange={(e) => set('bhEmail', e.target.value)}
@@ -465,11 +467,10 @@ export default function AssessmentsPage({ user }) {
         const bhName  = String(pd[currentRole?.bhNameCol]  || '').trim();
         const bhEmail = String(pd[currentRole?.bhEmailCol] || '').trim();
 
-        // BH is mandatory. RM is optional — when blank, the assessment skips the
-        // RM stage and routes straight to BH with blank RM ratings.
-        if (!bhName || !bhEmail) {
+        // RM or BH — at least one. Whichever is blank, its stage is skipped.
+        if ((!rmName || !rmEmail) && (!bhName || !bhEmail)) {
           skipped++;
-          errors.push(`${emp.empName} (${emp.empCode}): missing BH routing`);
+          errors.push(`${emp.empName} (${emp.empCode}): neither RM nor BH routing`);
           continue;
         }
         if (!rmName || !rmEmail) noRm++;
@@ -619,7 +620,7 @@ export default function AssessmentsPage({ user }) {
                 {(invitesResult.selfGroupsEmailed || 0) > 0 && <> · {invitesResult.selfGroupsEmailed} Self ({invitesResult.selfPairsMarked || 0} pair{invitesResult.selfPairsMarked !== 1 ? 's' : ''})</>}
                 {(invitesResult.rmGroupsEmailed   || 0) > 0 && <> · {invitesResult.rmGroupsEmailed} RM ({invitesResult.rmPairsMarked || 0} pair{invitesResult.rmPairsMarked !== 1 ? 's' : ''})</>}
                 {(invitesResult.bhGroupsEmailed   || 0) > 0 && <> · {invitesResult.bhGroupsEmailed} BH ({invitesResult.bhPairsMarked || 0} pair{invitesResult.bhPairsMarked !== 1 ? 's' : ''})</>}
-                . See <a className="underline" href="/admin/audit?action=INVITE_SENT">Audit log</a> for the paper trail.
+                . See <a className="underline" href={`${BASE_PATH}/admin/audit?action=INVITE_SENT`}>Audit log</a> for the paper trail.
               </span>
             )}
           </div>
@@ -689,7 +690,7 @@ export default function AssessmentsPage({ user }) {
           <div className="px-6 py-12 text-center text-sm text-slate-500">
             All {masterOwned.length} employees for this template come from the ZingHR master.
             <br />
-            <a href="/admin/launch" className="text-blue-600 underline hover:text-blue-800">
+            <a href={`${BASE_PATH}/admin/launch`} className="text-blue-600 underline hover:text-blue-800">
               Launch them from the Employee Master
             </a>
             {' '}— this screen is for third-party and off-roll staff who are not in ZingHR.
@@ -750,7 +751,7 @@ export default function AssessmentsPage({ user }) {
                       </td>
                       <td className="px-4 py-3 space-x-2 flex items-center">
                         {!pair && fromMaster ? (
-                          <a href="/admin/launch"
+                          <a href={`${BASE_PATH}/admin/launch`}
                              className="text-xs text-slate-500 underline hover:text-slate-800"
                              title="This employee comes from the ZingHR master and is launched there">
                             Launch from Master
