@@ -19,7 +19,7 @@ export default function Layout({ children, title }) {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* ── Top Bar ── */}
-      <header className="bg-slate-800 text-white shadow-md">
+      <header className="pk-public-header text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           {/* Logo / App name */}
           <Link href="/dashboard" className="flex items-center gap-2">

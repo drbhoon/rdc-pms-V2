@@ -27,14 +27,16 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, borderColor, textColor }) {
+// ── Stat tile (the LMS's coloured tiles) ─────────────────────────────────────
+function StatCard({ label, value, tone }) {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm pl-5 pr-6 py-5 border-l-4 ${borderColor} flex items-center gap-4`}>
-      <div>
-        <div className={`text-3xl font-bold ${textColor}`}>{value ?? '—'}</div>
-        <div className="text-xs text-slate-500 mt-0.5 font-medium">{label}</div>
-      </div>
+    <div className={`pk-stat tone-${tone}`}>
+      <svg className="pk-stat-bg" width="84" height="84" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="5" /><rect x="12" y="8" width="3" height="9" /><rect x="17" y="5" width="3" height="12" />
+      </svg>
+      <strong>{value ?? '—'}</strong>
+      <span>{label}</span>
     </div>
   );
 }
@@ -302,18 +304,18 @@ export default function DashboardPage({ user }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
         {loadingStats && !stats ? (
           Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-slate-200 h-24 animate-pulse" />
+            <div key={i} className="rounded-2xl bg-slate-200/70 h-28 animate-pulse" />
           ))
         ) : (
           <>
-            <StatCard label="Total Selected"  value={stats?.total ?? stats?.totalSelected} borderColor="border-l-blue-500"   textColor="text-blue-600"   />
-            <StatCard label="Awaiting Self"   value={stats?.pendingSelf}   borderColor="border-l-indigo-500" textColor="text-indigo-600" />
-            <StatCard label="Awaiting Level 1" value={stats?.pendingRm}   borderColor="border-l-orange-500" textColor="text-orange-600" />
-            <StatCard label="Awaiting Level 2" value={stats?.rmSubmitted} borderColor="border-l-purple-500" textColor="text-purple-600" />
-            <StatCard label="Awaiting HR-SPOC" value={stats?.awaitingHrSpoc} borderColor="border-l-teal-500"   textColor="text-teal-600"   />
-            <StatCard label="Awaiting HR-HEAD" value={stats?.awaitingHrHead} borderColor="border-l-violet-500" textColor="text-violet-600" />
-            <StatCard label="Awaiting COTO"   value={stats?.awaitingCoto}  borderColor="border-l-rose-500"   textColor="text-rose-600"   />
-            <StatCard label="Finalised"       value={stats?.finalized}     borderColor="border-l-green-500"  textColor="text-green-600"  />
+            <StatCard label="Total Selected"  value={stats?.total ?? stats?.totalSelected} tone="blue"   />
+            <StatCard label="Awaiting Self"   value={stats?.pendingSelf}   tone="indigo" />
+            <StatCard label="Awaiting Level 1" value={stats?.pendingRm}   tone="amber" />
+            <StatCard label="Awaiting Level 2" value={stats?.rmSubmitted} tone="purple" />
+            <StatCard label="Awaiting HR-SPOC" value={stats?.awaitingHrSpoc} tone="teal"   />
+            <StatCard label="Awaiting HR-HEAD" value={stats?.awaitingHrHead} tone="violet" />
+            <StatCard label="Awaiting COTO"   value={stats?.awaitingCoto}  tone="rose"   />
+            <StatCard label="Finalised"       value={stats?.finalized}     tone="green"  />
           </>
         )}
       </div>

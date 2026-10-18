@@ -37,27 +37,43 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-4">
-      {/* Background pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
-        {/* Branding */}
-        <div className="text-center mb-8">
-          <div className="mb-4 flex justify-center">
-            <BrandLogo imgClassName="h-10" className="px-2 py-1.5" />
+    <div className="min-h-screen px-4 py-8 lg:py-[4vh] flex items-center">
+      <div className="mx-auto w-full max-w-[1180px] grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] items-center">
+        {/* Welcome panel — the LMS's light hero */}
+        <section className="hidden lg:flex min-h-[600px] flex-col justify-between rounded-2xl border border-[#cfe7d6] bg-gradient-to-br from-white to-[#eef7f1] p-10 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 text-navy font-extrabold">
+            <BrandLogo imgClassName="h-12" className="px-2 py-1.5 border border-slate-200" />
+            <span>RDC Concrete (India) Ltd</span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">RDC Performance</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Management System – HR Console
+          <div>
+            <h1 className="text-5xl xl:text-6xl font-extrabold leading-none tracking-tight text-navy max-w-[760px]">
+              PARAKH<br /><span className="text-blue-600">Performance Management</span>
+            </h1>
+            <p className="mt-5 text-lg text-slate-600 max-w-[620px]">
+              Appraisals from launch to sign-off: Level 1, Level 2 and the HR stages, in one place.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 max-w-[620px]">
+            {['Launch from the employee master', 'Reviewers work from one link', 'Reports ready to download'].map((t) => (
+              <div key={t} className="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-semibold text-navy shadow-sm">{t}</div>
+            ))}
+          </div>
+        </section>
+
+      <div className="relative w-full max-w-md mx-auto">
+        {/* Branding (phones and small screens) */}
+        <div className="text-center mb-6 lg:hidden">
+          <div className="mb-3 flex justify-center">
+            <BrandLogo imgClassName="h-10" className="px-2 py-1.5 border border-slate-200" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-navy tracking-tight">PARAKH</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Performance Management – HR Console
           </p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/40 p-8">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-lift p-8">
           <h2 className="text-xl font-semibold text-slate-800 mb-1">Sign in to your account</h2>
           <p className="text-sm text-slate-500 mb-6">Enter your HR admin credentials to continue</p>
 
@@ -123,9 +139,10 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-600">
+        <p className="mt-6 text-center text-xs text-slate-500">
           © {new Date().getFullYear()} RDC Concrete (India) Ltd. — Internal HR System
         </p>
+      </div>
       </div>
     </div>
   );

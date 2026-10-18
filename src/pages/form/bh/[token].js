@@ -357,7 +357,7 @@ export default function BhFormPage({ pair, questions, employee, isOjt, priorStag
 
 function BhHeader() {
   return (
-    <header className="bg-[#0f172a] text-white shadow-md">
+    <header className="pk-public-header text-white shadow-md">
       <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
         <BrandLogo />
         <div>

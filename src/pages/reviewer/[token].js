@@ -75,7 +75,7 @@ export default function ReviewerDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="bg-slate-900 text-white px-6 py-5">
+      <div className="pk-public-header text-white px-6 py-5">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3">
             <BrandLogo />

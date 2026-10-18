@@ -215,7 +215,7 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-slate-800 truncate">{poll.title}</h2>
@@ -284,11 +284,11 @@ function PollDetail({ detail, people, busy, call, onDeleted }) {
         )}
         {questions.map((q, i) => (
           <div key={i} className="border border-slate-200 rounded-lg p-3 space-y-2">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <span className="text-xs text-slate-400 pt-2 w-5">{i + 1}.</span>
               <input value={q.text} disabled={locked} onChange={(e) => patchQ(i, { text: e.target.value })}
                 placeholder="Question"
-                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg disabled:bg-slate-50" />
+                className="flex-1 min-w-[12rem] px-3 py-2 text-sm border border-slate-200 rounded-lg disabled:bg-slate-50" />
               <select value={q.type} disabled={locked} onChange={(e) => patchQ(i, { type: e.target.value })}
                 className="px-2 py-2 text-xs border border-slate-200 rounded-lg disabled:bg-slate-50">
                 {QUESTION_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}

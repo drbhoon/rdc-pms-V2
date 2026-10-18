@@ -10,13 +10,13 @@ import { useRouter } from 'next/router';
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4">
+    <div className="min-h-screen bg-slate-50 py-6 sm:py-10 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-slate-900 rounded-t-xl px-6 py-4">
+        <div className="pk-public-header rounded-t-2xl px-6 py-4">
           <span className="text-white font-bold">RDC PARAKH</span>
           <span className="text-slate-400 text-sm ml-2">Poll</span>
         </div>
-        <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl p-6 shadow-sm">{children}</div>
+        <div className="bg-white border border-t-0 border-slate-200 rounded-b-2xl p-5 sm:p-6 shadow-sm">{children}</div>
       </div>
     </div>
   );
@@ -117,9 +117,9 @@ export default function PollForm() {
             {q.type === 'MULTI_CHOICE' && (
               <>
                 <p className="text-xs text-slate-400 mb-2">Choose up to {q.maxChoices || q.options.length}.</p>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {q.options.map((o) => (
-                    <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700">
+                    <label key={o.value} className="pk-option flex items-center gap-2 text-sm text-slate-700">
                       <input type="checkbox" checked={(answers[q.id] || []).includes(o.value)} onChange={() => toggleMulti(q, o.value)} />
                       {o.label}
                     </label>
@@ -128,9 +128,9 @@ export default function PollForm() {
               </>
             )}
             {(q.type === 'SINGLE_CHOICE' || q.type === 'RATING_1_5') && (
-              <div className={q.type === 'RATING_1_5' ? 'flex gap-4' : 'space-y-1'}>
+              <div className={q.type === 'RATING_1_5' ? 'flex flex-wrap gap-2' : 'space-y-2'}>
                 {q.options.map((o) => (
-                  <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700">
+                  <label key={o.value} className="pk-option flex items-center gap-2 text-sm text-slate-700">
                     <input type="radio" name={q.id} value={o.value}
                       checked={answers[q.id] === o.value} onChange={() => setAnswer(q, o.value)} />
                     {o.label}

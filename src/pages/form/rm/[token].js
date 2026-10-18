@@ -176,7 +176,7 @@ export default function RmFormPage({ pair, questions, employee, isOjt, priorStag
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Header ── */}
-      <header className="bg-[#0f172a] text-white shadow-md">
+      <header className="pk-public-header text-white shadow-md">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
           <BrandLogo />
           <div>
