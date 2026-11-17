@@ -630,6 +630,73 @@ export async function getHrReviewsForDashboard({ email, role, roleKey, cycle }) 
   return reviews;
 }
 
+// ── Employee portal: everything waiting on one person ───────────────────────
+// What hr.rdcc.ai/employees lists for somebody as pending in PARAKH: every
+// form that is theirs to fill right now, in any role, across all templates and
+// cycles. The rules are the ones the reminder e-mails above use (stage,
+// archived, template switched off, start date), kept here beside them so the
+// page and the e-mail cannot disagree. One difference, on purpose: it does not
+// wait for the invite e-mail to have gone out, so a form shows up as soon as
+// it is that person's turn.
+//
+// Returns flat rows: { role, pairId, empCode, empName, roleKey, cycle, token,
+// since }. `token` is the form token for that role, the same one the reviewer
+// dashboard links to.
+export async function getPendingForEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return [];
+
+  // Addresses came from uploaded sheets and may carry stray spaces or capitals
+  // (see getPairsForReviewer). SQL narrows with a loose match; `same` decides.
+  const like = { contains: norm, mode: 'insensitive' };
+  const same = (value) => String(value || '').trim().toLowerCase() === norm;
+  const live = { isArchived: false, role: { isActive: true } };
+  const started = { OR: [{ startOn: null }, { startOn: { lte: new Date() } }] };
+  const order = [{ roleKey: 'asc' }, { cycle: 'asc' }, { empName: 'asc' }];
+
+  const [selfPairs, rmPairs, bhPairs, reviews] = await Promise.all([
+    prisma.assessmentPair.findMany({
+      where: { ...live, ...started, status: 'PENDING_SELF', requireSelf: true, selfEmail: like },
+      orderBy: order,
+    }),
+    prisma.assessmentPair.findMany({
+      where: { ...live, ...started, status: 'PENDING_RM', rmEmail: like },
+      orderBy: order,
+    }),
+    prisma.assessmentPair.findMany({
+      where: { ...live, ...started, status: 'RM_SUBMITTED', requireBh: true, bhEmail: like },
+      orderBy: order,
+    }),
+    prisma.hrReview.findMany({
+      where: { submittedOn: null, email: like, role: { in: HR_ORDER }, pair: live },
+      include: { pair: { include: { hrReviews: true } } },
+      orderBy: [{ createdAt: 'asc' }],
+    }),
+  ]);
+
+  const row = (role, pair, token, since) => ({
+    role,
+    pairId:  pair.pairId,
+    empCode: pair.empCode,
+    empName: pair.empName,
+    roleKey: pair.roleKey,
+    cycle:   pair.cycle,
+    token,
+    since:   since || pair.createdAt,
+  });
+
+  return [
+    ...selfPairs.filter((p) => same(p.selfEmail) && p.selfToken)
+      .map((p) => row('SELF', p, p.selfToken, p.selfInvitedOn)),
+    ...rmPairs.filter((p) => same(p.rmEmail))
+      .map((p) => row('RM', p, p.rmToken, p.rmInvitedOn || p.selfSubmittedOn)),
+    ...bhPairs.filter((p) => same(p.bhEmail))
+      .map((p) => row('BH', p, p.bhToken, p.bhInvitedOn || p.rmSubmittedOn)),
+    ...reviews.filter((r) => same(r.email) && priorStagesComplete(r.pair, r.role))
+      .map((r) => row(r.role, r.pair, r.token, r.invitedOn || r.pair.bhSubmittedOn || r.pair.rmSubmittedOn)),
+  ];
+}
+
 // Self-assessment submit: status flips PENDING_SELF → next stage so the
 // existing invite/cron path picks it up. Self does NOT lock the pair.
 // With an RM the next stage is PENDING_RM; without one (requireRm=false) it
