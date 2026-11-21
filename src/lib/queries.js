@@ -288,16 +288,44 @@ export async function bulkUpsertEmployees(rows) {
 
 // ── Assessment Pairs ───────────────────────────────────────────────────────
 
+// Newest launch first, so a cycle that was just launched is at the top of
+// the dashboard rather than scattered through it by employee code.
+export const NEWEST_FIRST = [{ selectedOn: 'desc' }, { createdAt: 'desc' }, { empCode: 'asc' }];
+
 export async function getPairsByRoleAndCycle(roleKey, cycle) {
   return prisma.assessmentPair.findMany({
     where:   { roleKey, cycle },
-    orderBy: { empCode: 'asc' },
+    orderBy: NEWEST_FIRST,
     include: { employee: { select: { profileData: true } }, hrReviews: true },
   });
 }
 
 export async function getPairById(pairId) {
   return prisma.assessmentPair.findUnique({ where: { pairId } });
+}
+
+/** A pair with its HR commenter rows and the employee profile (for e-mails). */
+export async function getPairWithReviews(pairId) {
+  return prisma.assessmentPair.findUnique({
+    where:   { pairId },
+    include: { hrReviews: true, employee: { select: { profileData: true } } },
+  });
+}
+
+/**
+ * The HR commenter stage this pair is waiting on now — 'HR_SPOC', 'HR_HEAD'
+ * or 'COTO' — with its HrReview row, or null when it is not with HR (still
+ * with Self/RM/BH, or finalised). `pair` must include its hrReviews.
+ */
+export function pendingHrStage(pair) {
+  if (!pair || pair.status === 'FINALIZED') return null;
+  for (const role of HR_ORDER) {
+    if (!hrStageActive(pair, role)) continue;
+    if (!priorStagesComplete(pair, role)) return null;
+    const review = (pair.hrReviews || []).find((r) => r.role === role);
+    if (review && !review.submittedOn) return { role, review };
+  }
+  return null;
 }
 
 export async function getPairByRmToken(rmToken) {

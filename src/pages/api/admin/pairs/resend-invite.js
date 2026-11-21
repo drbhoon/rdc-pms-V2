@@ -8,13 +8,15 @@
  *   PENDING_SELF → re-email the employee
  *   PENDING_RM   → re-email the RM
  *   RM_SUBMITTED → re-email the BH
+ *   with HR      → re-email whichever of HR-SPOC / HR-HEAD / COTO is pending
  *   FINALIZED    → 400 (nothing to invite)
  *
  * Writes audit (INVITE_SENT / INVITE_FAILED) just like the cron path.
  */
 import { requireAuth } from '../../../../lib/auth';
 import {
-  getPairById,
+  getPairWithReviews,
+  pendingHrStage,
   getRole,
   getOrCreateReviewerLink,
   appendAudit,
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
   if (!pairId) return res.status(400).json({ error: 'pairId is required' });
 
   try {
-    const pair = await getPairById(pairId);
+    const pair = await getPairWithReviews(pairId);
     if (!pair) return res.status(404).json({ error: 'Pair not found' });
 
     // Decide which reviewer to ping based on current status.
@@ -51,6 +53,10 @@ export default async function handler(req, res) {
       role = 'BH'; recipient = pair.bhEmail; name = pair.bhName;
     } else if (pair.status === 'FINALIZED') {
       return res.status(400).json({ error: 'Pair is finalised — no invite to send' });
+    } else if (pendingHrStage(pair)) {
+      // With the HR commenters: the one whose turn it is.
+      const { role: hrRole, review } = pendingHrStage(pair);
+      role = hrRole; recipient = review.email; name = review.name || review.email;
     } else {
       return res.status(400).json({ error: `Unsupported status: ${pair.status}` });
     }

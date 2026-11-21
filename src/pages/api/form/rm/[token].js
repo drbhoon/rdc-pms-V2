@@ -12,6 +12,7 @@ import {
   getOrCreateReviewerLink,
 } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
+import { notifyIfCompleted } from '../../../../lib/completion';
 import { questionAudience, isReservedColumnKey } from '../../../../lib/ojt';
 import { hrSpocNameFor } from '../../../../lib/basicData';
 import { questionsForPair } from '../../../../lib/templateSnapshot';
@@ -164,6 +165,10 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('[form/rm] runInvites failed:', e.message);
       }
+
+      // A pair with no BH and no HR stage is finalised by the RM's submission.
+      // Finalised: tell the HR SPOC and whoever launched it (no-op otherwise).
+      await notifyIfCompleted(pair.pairId);
 
       return res.status(200).json({ ok: true, inviteResult });
     } catch (err) {

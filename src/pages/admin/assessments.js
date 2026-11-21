@@ -786,8 +786,8 @@ export default function AssessmentsPage({ user }) {
                           </>
                         ) : (
                           <>
-                            {/* Resend only for SELF/RM/BH stages (resend-invite endpoint scope) */}
-                            {(pair.status === 'PENDING_SELF' || pair.status === 'PENDING_RM' || pair.status === 'RM_SUBMITTED') && (
+                            {/* Resend to whoever is pending: Self, RM, BH, or the HR-SPOC / HR-HEAD / COTO commenter */}
+                            {['PENDING_SELF', 'PENDING_RM', 'RM_SUBMITTED', 'BH_SUBMITTED', 'HR_SPOC_SUBMITTED', 'HR_HEAD_SUBMITTED'].includes(pair.status) && (
                               <button
                                 onClick={() => handleResend(pair.pairId, emp.empName)}
                                 disabled={resending === pair.pairId}

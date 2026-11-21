@@ -13,6 +13,9 @@ const nextConfig = {
     // Consumed on the client by src/lib/basePath.js
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
+  // src/instrumentation.js starts PARAKH's own scheduler at server start
+  // (only where IN_APP_SCHEDULER=true). Next 14 needs this flag to run it.
+  experimental: { instrumentationHook: true },
   // Note: top-level `api.bodyParser` was removed in Next 13+. Routes that
   // accept large Excel-derived JSON payloads set their own bodyParser limit
   // via `export const config = { api: { bodyParser: { sizeLimit: '...' } } }`.

@@ -19,6 +19,7 @@ import {
   bhStageDone,
 } from './queries';
 import { runInvitesWithTimeout } from './invites';
+import { notifyIfCompleted } from './completion';
 import { questionAudience, isReservedColumnKey } from './ojt';
 import { hrSpocNameFor } from './basicData';
 import { hrFieldsForPair, questionsForPair } from './templateSnapshot';
@@ -239,6 +240,9 @@ export function makeHrFormHandler(role) {
         } catch (e) {
           console.error(`[form/${role}] runInvites failed:`, e.message);
         }
+
+        // Finalised: tell the HR SPOC and whoever launched it (no-op otherwise).
+        if (locked) await notifyIfCompleted(pair.pairId);
 
         return res.status(200).json({ ok: true, finalized: locked, inviteResult });
       } catch (err) {

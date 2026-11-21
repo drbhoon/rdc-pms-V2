@@ -4,7 +4,7 @@
  * GET /api/admin/reports?roleKey=X&archived=1         → all archived (any cycle)
  */
 import { requireAuth } from '../../../lib/auth';
-import { getRole } from '../../../lib/queries';
+import { getRole, NEWEST_FIRST } from '../../../lib/queries';
 import { prisma } from '../../../lib/db';
 import { audienceForKey, isReservedColumnKey } from '../../../lib/ojt';
 import { hrSpocNameFor } from '../../../lib/basicData';
@@ -32,7 +32,9 @@ export default async function handler(req, res) {
       prisma.assessmentPair.findMany({
         where,
         include: { employee: { select: { profileData: true } }, hrReviews: true },
-        orderBy: { empCode: 'asc' },
+        // Newest launch first — the report and its Excel read the same way as
+        // the dashboard.
+        orderBy: NEWEST_FIRST,
       }),
     ]);
 

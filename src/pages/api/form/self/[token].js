@@ -14,6 +14,7 @@ import {
   getOrCreateReviewerLink,
 } from '../../../../lib/queries';
 import { runInvitesWithTimeout } from '../../../../lib/invites';
+import { notifyIfCompleted } from '../../../../lib/completion';
 import { audienceForKey, isReservedColumnKey } from '../../../../lib/ojt';
 import { hrSpocNameFor } from '../../../../lib/basicData';
 import { questionsForPair } from '../../../../lib/templateSnapshot';
@@ -160,6 +161,9 @@ export default async function handler(req, res) {
           console.error('[form/self] runInvites failed:', e.message);
         }
       }
+
+      // Finalised: tell the HR SPOC and whoever launched it (no-op otherwise).
+      if (pair.templateType === 'FEEDBACK') await notifyIfCompleted(pair.pairId);
 
       return res.status(200).json({ ok: true, finalized: pair.templateType === 'FEEDBACK', inviteResult });
     } catch (err) {

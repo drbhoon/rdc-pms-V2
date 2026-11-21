@@ -360,3 +360,53 @@ export async function sendPollInvite({ name, email, pollTitle, description, clos
   console.log(`[mailer] poll ${isReminder ? 'reminder' : 'invite'} to ${email}:`, result.ok ? 'sent' : result.error);
   return result;
 }
+
+// ── Assessment completed (to the HR SPOC and whoever launched it) ─────────────
+// One e-mail per finalised assessment. `to` is one address; the caller sends
+// to each recipient separately so nobody sees the other's address.
+export async function sendCompletionNotice({ to, name, empName, empCode, roleLabel, cycle, completedOn, reviewers, reportUrl }) {
+  const transport = getTransport();
+  if (!transport) {
+    console.log('[mailer] SMTP not configured — skipping completion notice to', to);
+    return { ok: false, skipped: true };
+  }
+  const when = new Date(completedOn || Date.now()).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+  const rows = [
+    ['Employee', `${empName} (${empCode})`],
+    ['Assessment', roleLabel],
+    ['Cycle', cycle],
+    ...reviewers.filter(([, v]) => v),
+    ['Completed on', `${when} IST`],
+  ].map(([k, v]) => `
+      <tr>
+        <td style="padding:6px 12px;border:1px solid #e2e8f0;color:#64748b;width:38%;">${k}</td>
+        <td style="padding:6px 12px;border:1px solid #e2e8f0;font-weight:600;color:#1e293b;">${v}</td>
+      </tr>`).join('');
+  const result = await sendWithRetry(transport, {
+    from: from(),
+    to,
+    subject: `Assessment completed — ${empName} (${empCode}) · ${roleLabel} · ${cycle}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1e293b;">
+        <div style="background:#12233f;border-radius:8px 8px 0 0;padding:16px 24px;">
+          <span style="color:#fff;font-weight:700;font-size:18px;">RDC PARAKH</span>
+          <span style="color:#94a3b8;font-size:13px;margin-left:8px;">ASSESSMENT COMPLETED</span>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:24px;">
+          <p style="margin:0 0 16px;">Dear <strong>${name}</strong>,</p>
+          <p style="margin:0 0 16px;">This assessment has been completed and is now final.</p>
+          <table style="border-collapse:collapse;width:100%;font-size:14px;margin:0 0 20px;">${rows}</table>
+          ${reportUrl ? `
+          <div style="text-align:center;margin:24px 0 8px;">
+            <a href="${reportUrl}" style="display:inline-block;background:#2457a6;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:15px;">
+              Open Reports in PARAKH →
+            </a>
+          </div>` : ''}
+          <p style="font-size:12px;color:#94a3b8;margin:16px 0 0;">You are receiving this as the HR SPOC for this employee, or because you launched this assessment.</p>
+        </div>
+      </div>
+    `,
+  });
+  console.log(`[mailer] completion notice to ${to}:`, result.ok ? 'sent' : result.error);
+  return result;
+}
